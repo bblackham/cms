@@ -852,11 +852,6 @@ class AddDatasetHandler(BaseHandler):
                     testcase.public,
                     dataset))
 
-        # If the task does not yet have an active dataset, make this
-        # one active.
-        if task.active_dataset_version == None:
-            task.active_dataset_version = dataset.version
-
         try:
             self.sql_session.commit()
         except IntegrityError as error:
@@ -867,6 +862,12 @@ class AddDatasetHandler(BaseHandler):
             self.redirect("/add_dataset/%s/%s" % (
                 task_id, dataset_version_to_copy))
             return
+
+        # If the task does not yet have an active dataset, make this
+        # one active.
+        if task.active_dataset_version == None:
+            task.active_dataset_version = dataset.version
+            self.sql_session.commit()
 
         self.redirect("/task/%s" % task_id)
 
