@@ -330,7 +330,12 @@ $("select[name=task_type]").change(showTaskTypeOption);
       {% end %}
       <a href="{{ url_root }}/add_dataset/{{ task.id }}/{{ dataset.version }}">[Clone]</a>
       <a href="{{ url_root }}/rename_dataset/{{ task.id }}/{{ dataset.version }}">[Rename]</a>
-      <a href="{{ url_root }}/delete_dataset/{{ task.id }}/{{ dataset.version }}">[Delete]</a><br>
+      {% if task.active_dataset_version == dataset.version %}
+      [Delete]
+      {% else %}
+      <a href="{{ url_root }}/delete_dataset/{{ task.id }}/{{ dataset.version }}">[Delete]</a>
+      {% end %}
+      <br/>
       <a href="{{ url_root }}/add_testcase/{{ task.id }}/{{ dataset.version }}">Add a testcase</a>
       <table class="bordered" style="text-align:center">
         <thead>

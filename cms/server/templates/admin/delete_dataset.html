@@ -7,10 +7,6 @@
 
 <form action="{{ url_root }}/delete_dataset/{{ dataset.task_id }}/{{ dataset.version }}" method="POST">
 
-{% if task.active_dataset_version == dataset.version %}
-    <b>WARNING</b>: The dataset you are about to delete is the active version for this task.<br/>
-{% end %}
-
     Are you sure you want to delete the dataset "{{ dataset.description }}" and all associated test cases?<br/>
 
     <input type="submit" value="Delete">

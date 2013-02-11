@@ -53,7 +53,7 @@ class Task(Base):
         ForeignKeyConstraint(
             ['id', 'active_dataset_version'],
             ['datasets.task_id', 'datasets.version'],
-            onupdate="SET NULL", ondelete="SET NULL",
+            onupdate="RESTRICT", ondelete="RESTRICT",
             use_alter=True,
             name='fk_dataset_version'),
         )
