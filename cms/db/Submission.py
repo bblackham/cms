@@ -591,7 +591,7 @@ class Evaluation(Base):
             ['task_id', 'dataset_version'],
             [Dataset.task_id, Dataset.version],
             onupdate="CASCADE", ondelete="CASCADE"),
-        UniqueConstraint('submission_id', 'num',
+        UniqueConstraint('submission_id', 'dataset_version', 'num',
                          name='cst_evaluations_submission_id_num'),
         )
 
