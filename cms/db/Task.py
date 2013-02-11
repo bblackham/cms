@@ -25,8 +25,8 @@ directly (import it from SQLAlchemyAll).
 
 """
 
-from sqlalchemy.schema import Column, ForeignKey, CheckConstraint, \
-    UniqueConstraint
+from sqlalchemy.schema import Column, ForeignKey, ForeignKeyConstraint, \
+    CheckConstraint, UniqueConstraint
 from sqlalchemy.types import Boolean, Integer, Float, String, Interval
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.orderinglist import ordering_list
@@ -50,12 +50,19 @@ class Task(Base):
         UniqueConstraint('contest_id', 'name',
                          name='cst_task_contest_id_name'),
         CheckConstraint("token_initial <= token_max"),
+        ForeignKeyConstraint(
+            ['id', 'active_dataset_version'],
+            ['datasets.task_id', 'datasets.version'],
+            onupdate="SET NULL", ondelete="SET NULL",
+            use_alter=True,
+            name='fk_dataset_version'),
         )
 
     # Auto increment primary key.
     id = Column(
         Integer,
-        primary_key=True)
+        primary_key=True,
+        autoincrement='ignore_fk')
 
     # Number of the task for sorting.
     num = Column(
@@ -184,10 +191,15 @@ class Task(Base):
         nullable=False,
         default=0)
 
+    # Active data set currently being used for scoring.
+    active_dataset_version = Column(
+        Integer,
+        nullable=True)
+
     # Follows the description of the fields automatically added by
     # SQLAlchemy.
     # submission_format (list of SubmissionFormatElement objects)
-    # testcases (list of Testcase objects)
+    # datasets (list of Dataset objects)
     # attachments (dict of Attachment objects indexed by filename)
     # managers (dict of Manager objects indexed by filename)
     # statements (dict of Statement objects indexed by language code)
@@ -225,8 +237,8 @@ class Task(Base):
                                          in self.managers.itervalues()],
                 'score_type':           self.score_type,
                 'score_type_parameters': self.score_type_parameters,
-                'testcases':            [testcase.export_to_dict()
-                                         for testcase in self.testcases],
+                'datasets':             [dataset.export_to_dict()
+                                         for dataset in self.datasets],
                 'token_initial':        self.token_initial,
                 'token_max':            self.token_max,
                 'token_total':          self.token_total,
@@ -261,8 +273,8 @@ class Task(Base):
                             for manager_data in data['managers']]
         data['managers'] = dict([(manager.filename, manager)
                                  for manager in data['managers']])
-        data['testcases'] = [Testcase.import_from_dict(testcase_data)
-                             for testcase_data in data['testcases']]
+        data['datasets'] = [Dataset.import_from_dict(dataset_data)
+                            for dataset_data in data['datasets']]
         data['statements'] = [Statement.import_from_dict(statement_data)
                               for statement_data in data['statements']]
         data['statements'] = dict([(statement.language, statement)
@@ -283,6 +295,67 @@ class Task(Base):
         return cls(**data)
 
 
+class Dataset(Base):
+    """Class to store the information about a data set. Not to be used
+    directly (import it from SQLAlchemyAll).
+
+    """
+    __tablename__ = 'datasets'
+    __table_args__ = (
+        UniqueConstraint('task_id', 'version',
+                         name='cst_datasets_task_id_version'),
+        )
+
+    # Task owning the testcase.
+    task_id = Column(
+        Integer,
+        ForeignKey(Task.id,
+            onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+        primary_key=True,
+        autoincrement=False)
+
+    version = Column(
+        Integer,
+        nullable=False,
+        primary_key=True,
+        autoincrement=True)
+
+    description = Column(
+        String)
+
+    # Task object owning the testcase.
+    task = relationship(
+        Task,
+        primaryjoin='Task.id==Dataset.task_id',
+        foreign_keys=task_id,
+        backref=backref('datasets',
+                        collection_class=ordering_list('version'),
+                        order_by=[version],
+                        cascade="all, delete-orphan",
+                        passive_deletes=True))
+
+    # Follows the description of the fields automatically added by
+    # SQLAlchemy.
+    # testcases (list of Testcase objects)
+
+    def __init__(self, task, version=None, description=''):
+        self.task = task
+        self.version = version
+        self.description = description
+
+    def export_to_dict(self):
+        """Return object data as a dictionary.
+
+        """
+        return {'task_id':  self.task_id,
+                'version': self.version,
+                'description': self.description,
+                'testcases': [testcase.export_to_dict()
+                              for testcase in self.testcases],
+            }
+
+
 class Testcase(Base):
     """Class to store the information about a testcase. Not to be used
     directly (import it from SQLAlchemyAll).
@@ -290,9 +363,13 @@ class Testcase(Base):
     """
     __tablename__ = 'task_testcases'
     __table_args__ = (
-        UniqueConstraint('task_id', 'num',
+        UniqueConstraint('task_id', 'dataset_version', 'num',
                          name='cst_task_testcases_task_id_num'),
-        )
+        ForeignKeyConstraint(
+            ['task_id', 'dataset_version'],
+            [Dataset.task_id, Dataset.version],
+            onupdate="CASCADE", ondelete="CASCADE"),
+    )
 
     # Auto increment primary key.
     id = Column(
@@ -319,15 +396,21 @@ class Testcase(Base):
         String,
         nullable=False)
 
-    # Task (id and object) owning the testcase.
+    # Task and dataset owning this testcase.
     task_id = Column(
         Integer,
         ForeignKey(Task.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
-    task = relationship(
-        Task,
+    dataset_version = Column(
+        Integer,
+        nullable=False,
+        index=True)
+
+    # Dataset object owning this testcase.
+    dataset = relationship(
+        Dataset,
         backref=backref('testcases',
                         collection_class=ordering_list('num'),
                         order_by=[num],
