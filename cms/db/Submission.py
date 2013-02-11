@@ -318,6 +318,30 @@ class SubmissionResult(Base):
         o.dataset_version = dataset_version
         return o
 
+    @classmethod
+    def get_from_submission_id(cls, submission_id, dataset_version, session):
+        # Extract the submission object to get the task id.
+        submission = Submission.get_from_id(submission_id, session)
+        if submission is None:
+            # If no submission exists, we can't create one.f
+            return None
+
+        # Find an existing submission result.
+        submission_result = SubmissionResult.get_from_id(
+            (submission_id, submission.task_id, dataset_version), session)
+        if submission_result is None:
+            # Create one for us now.
+            submission_result = SubmissionResult(
+                    submission=submission, task=submission.task)
+            # When instantiating, we would need to provide a dataset
+            # object, not dataset_version. Instead, instantiate without,
+            # and set dataset_version afterwards.
+            submission_result.dataset_version = dataset_version
+
+            session.add(submission_result)
+
+        return submission_result
+
     def compiled(self):
         """Return if the submission has been compiled.
 
