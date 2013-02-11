@@ -533,7 +533,7 @@ class Executable(Base):
         String,
         nullable=False)
 
-    # Submission (id and object) of the submission.
+    # Submission id of the submission.
     submission_id = Column(
         Integer,
         ForeignKey(Submission.id,
@@ -549,12 +549,14 @@ class Executable(Base):
         nullable=False,
         index=True)
     task = relationship(Task)
+
+    # Dataset that this evaluation belongs to.
     dataset_version = Column(
         Integer,
         nullable=True,
         index=True)
 
-    # Submission result owning this executable..
+    # Submission result owning this executable.
     submission_result = relationship(
         SubmissionResult,
         backref=backref('executables',
@@ -580,6 +582,15 @@ class Evaluation(Base):
     """
     __tablename__ = 'evaluations'
     __table_args__ = (
+        ForeignKeyConstraint(
+            ['submission_id', 'task_id', 'dataset_version'],
+            [SubmissionResult.submission_id, SubmissionResult.task_id, \
+                SubmissionResult.dataset_version],
+            onupdate="CASCADE", ondelete="CASCADE"),
+        ForeignKeyConstraint(
+            ['task_id', 'dataset_version'],
+            [Dataset.task_id, Dataset.version],
+            onupdate="CASCADE", ondelete="CASCADE"),
         UniqueConstraint('submission_id', 'num',
                          name='cst_evaluations_submission_id_num'),
         )
@@ -594,15 +605,32 @@ class Evaluation(Base):
         Integer,
         nullable=False)
 
-    # Submission (id and object) of the submission.
+    # Submission id of the submission.
     submission_id = Column(
         Integer,
         ForeignKey(Submission.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
-    submission = relationship(
-        Submission,
+
+    # Task of the object (needed for foreign key relation to Datasets).
+    task_id = Column(
+        Integer,
+        ForeignKey(Task.id,
+                   onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+        index=True)
+    task = relationship(Task)
+
+    # Dataset that this evaluation belongs to.
+    dataset_version = Column(
+        Integer,
+        nullable=True,
+        index=True)
+
+    # Submission result owning this evaluation.
+    submission_result = relationship(
+        SubmissionResult,
         backref=backref('evaluations',
                         collection_class=ordering_list('num'),
                         order_by=[num],
