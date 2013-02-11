@@ -1140,7 +1140,7 @@ class AddTaskHandler(BaseHandler):
             statements = {}
             attachments = {}
             managers = {}
-            datasets = []
+            datasets = {}
 
         except Exception as error:
             self.application.service.add_notification(

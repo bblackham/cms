@@ -332,8 +332,7 @@ class Dataset(Base):
         primaryjoin='Task.id==Dataset.task_id',
         foreign_keys=task_id,
         backref=backref('datasets',
-                        collection_class=ordering_list('version'),
-                        order_by=[version],
+                        collection_class=smart_mapped_collection('version'),
                         cascade="all, delete-orphan",
                         passive_deletes=True))
 
