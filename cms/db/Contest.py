@@ -276,9 +276,10 @@ class Contest(Base):
 
             # Enumerate testcases
             if not light:
-                for testcase in task.testcases:
-                    files.add(testcase.input)
-                    files.add(testcase.output)
+                for dataset in task.datasets.values():
+                    for testcase in dataset.testcases:
+                        files.add(testcase.input)
+                        files.add(testcase.output)
 
         if not skip_submissions:
             for submission in self.get_submissions():
