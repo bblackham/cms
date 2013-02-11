@@ -868,13 +868,21 @@ class EvaluationService(Service):
             self.push_in_queue(job, priority, timestamp)
         return True
 
-    def submission_busy(self, submission_id):
+    def submission_busy(self, submission_id, dataset_version):
         """Check if the submission has a related job in the queue or
         assigned to a worker.
 
         """
-        jobs = [(EvaluationService.JOB_TYPE_COMPILATION, submission_id),
-                (EvaluationService.JOB_TYPE_EVALUATION, submission_id)]
+        jobs = [
+            JobQueueEntry(
+                EvaluationService.JOB_TYPE_COMPILATION,
+                submission_id,
+                dataset_version),
+            JobQueueEntry(
+                EvaluationService.JOB_TYPE_EVALUATION,
+                submission_id,
+                dataset_version),
+        ]
         return any([job in self.queue or job in self.pool for job in jobs])
 
     def user_test_busy(self, user_test_id):
@@ -882,8 +890,16 @@ class EvaluationService(Service):
         assigned to a worker.
 
         """
-        jobs = [(EvaluationService.JOB_TYPE_TEST_COMPILATION, user_test_id),
-                (EvaluationService.JOB_TYPE_TEST_EVALUATION, user_test_id)]
+        jobs = [
+            JobQueueEntry(
+                EvaluationService.JOB_TYPE_TEST_COMPILATION,
+                user_test_id,
+                None),
+            JobQueueEntry(
+                EvaluationService.JOB_TYPE_TEST_EVALUATION,
+                user_test_id,
+                None),
+        ]
         return any([job in self.queue or job in self.pool for job in jobs])
 
     def job_busy(self, job):
@@ -891,12 +907,12 @@ class EvaluationService(Service):
         has other related jobs in the queue or assigned to a worker.
 
         """
-        if job[0] in [EvaluationService.JOB_TYPE_COMPILATION,
-                      EvaluationService.JOB_TYPE_EVALUATION]:
-            return self.submission_busy(job[1])
-        elif job[0] in [EvaluationService.JOB_TYPE_TEST_COMPILATION,
-                        EvaluationService.JOB_TYPE_TEST_EVALUATION]:
-            return self.user_test_busy(job[1])
+        if job.job_type in (EvaluationService.JOB_TYPE_COMPILATION,
+                      EvaluationService.JOB_TYPE_EVALUATION):
+            return self.submission_busy(job.submission_id, job.dataset_version)
+        elif job.job_type in (EvaluationService.JOB_TYPE_TEST_COMPILATION,
+                        EvaluationService.JOB_TYPE_TEST_EVALUATION):
+            return self.user_test_busy(job.submission_id)
         else:
             raise Exception("Wrong job type %s" % (job[0]))
 
