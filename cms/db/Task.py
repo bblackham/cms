@@ -304,8 +304,8 @@ class Dataset(Base):
     __table_args__ = (
         UniqueConstraint('task_id', 'version',
                          name='cst_datasets_task_id_version'),
-        UniqueConstraint('description',
-                         name='cst_datasets_description'),
+        UniqueConstraint('task_id', 'description',
+                         name='cst_datasets_task_id_description'),
         )
 
     # Task owning the testcase.
