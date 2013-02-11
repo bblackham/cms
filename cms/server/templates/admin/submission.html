@@ -3,7 +3,7 @@
 {% block core %}
 {% from cms.grading.scoretypes import get_score_type %}
 {% set st = get_score_type(submission=s) %}
-{% set sr = s.results.get(s.task.active_dataset_version, None) %}
+{% set sr = s.results.get(s.task.active_dataset_version) %}
 <div class="core_title">
   <h1>Submission {{ s.id }}</h1>
 </div>
