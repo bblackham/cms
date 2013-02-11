@@ -826,6 +826,19 @@ class AddDatasetHandler(BaseHandler):
         description = self.get_argument("description", "")
 
         task = self.safe_get_item(Task, task_id)
+
+        # Ensure description is unique.
+        for _, d in task.datasets.iteritems():
+            if d.description == description:
+                self.application.service.add_notification(
+                    make_datetime(),
+                    "Dataset name \"%s\" is already taken." % description,
+                    "Please choose a unique name for this dataset.")
+                self.redirect("/add_dataset/%s/%s" % (
+                    task_id, dataset_version_to_copy))
+                return
+
+        # Add new dataset.
         dataset = Dataset(task, description=description)
         self.sql_session.add(dataset)
 
@@ -874,6 +887,18 @@ class RenameDatasetHandler(BaseHandler):
     def post(self, task_id, dataset_version):
         description = self.get_argument("description", "")
         self.sql_session.close()
+
+        # Ensure description is unique.
+        task = self.safe_get_item(Task, task_id)
+        for _, d in task.datasets.iteritems():
+            if d.version != dataset_version and d.description == description:
+                self.application.service.add_notification(
+                    make_datetime(),
+                    "Dataset name \"%s\" is already taken." % description,
+                    "Please choose a unique name for this dataset.")
+                self.redirect("/rename_dataset/%s/%s" % (
+                    task_id, dataset_version))
+                return
 
         self.sql_session = Session()
         dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
