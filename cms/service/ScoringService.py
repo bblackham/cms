@@ -33,6 +33,7 @@ import threading
 import simplejson as json
 import base64
 import time
+import traceback
 import socket
 import ssl
 
@@ -40,7 +41,8 @@ from cms import config, default_argument_parser, logger
 from cms.async import ServiceCoord
 from cms.async.AsyncLibrary import Service, rpc_method
 from cms.db import ask_for_contest
-from cms.db.SQLAlchemyAll import SessionGen, Submission, Contest
+from cms.db.SQLAlchemyAll import SessionGen, Submission, SubmissionResult, \
+    Contest
 from cms.grading.scoretypes import get_score_type
 from cms.service import get_submissions
 from cmscommon.DateTime import make_timestamp
@@ -389,6 +391,7 @@ class ScoringService(Service):
                 except Exception as error:
                     logger.critical("Cannot get score type for task %s: %r" %
                                     (task.name, error))
+                    logger.critical(traceback.format_exc())
                     self.exit()
             session.commit()
 
@@ -409,8 +412,10 @@ class ScoringService(Service):
             new_submission_ids_to_score = set([])
             new_submission_ids_to_token = set([])
             for submission in contest.get_submissions():
-                if (submission.evaluated()
-                    or submission.compilation_outcome == "fail") \
+                dataset_version = submission.task.active_dataset_version
+                r = submission.results.get(dataset_version)
+                if r is not None and (r.evaluated()
+                    or r.compilation_outcome == "fail") \
                         and submission.id not in self.submission_ids_scored:
                     new_submission_ids_to_score.add(submission.id)
                 if submission.tokened() \
@@ -456,7 +461,11 @@ class ScoringService(Service):
                     (to_score, to_token))
 
         for unused_i in xrange(to_score_now):
-            self.new_evaluation(self.submission_ids_to_score.pop())
+            with SessionGen(commit=False) as session:
+                submission_id = self.submission_ids_to_score.pop()
+                submission = Submission.get_from_id(submission_id, session)
+                self.new_evaluation(submission_id,
+                    submission.task.active_dataset_version)
         if to_score - to_score_now > 0:
             return True
 
@@ -626,30 +635,36 @@ class ScoringService(Service):
                 self.initialize_queue.add(ranking)
 
     @rpc_method
-    def new_evaluation(self, submission_id):
+    def new_evaluation(self, submission_id, dataset_version):
         """This RPC inform ScoringService that ES finished the work on
         a submission (either because it has been evaluated, or because
         the compilation failed).
 
         submission_id (int): the id of the submission that changed.
+        dataset_verion (int): the dataset version used.
 
         """
         with SessionGen(commit=True) as session:
-            submission = Submission.get_from_id(submission_id, session)
-            if submission is None:
+            submission_result = SubmissionResult.get_from_submission_id(
+                submission_id, dataset_version, session)
+
+            if submission_result is None:
                 logger.error("[new_evaluation] Couldn't find "
                              " submission %d in the database." %
                              submission_id)
                 raise KeyError
-            elif not submission.compiled():
-                logger.warning("[new_evaluation] Submission %d "
-                               "is not compiled." % submission_id)
+            submission = submission_result.submission
+
+            if not submission_result.compiled():
+                logger.warning("[new_evaluation] Submission %d(%d) "
+                               "is not compiled." % (
+                               submission_id, dataset_version))
                 return
-            elif submission.compilation_outcome == "ok" \
-                    and not submission.evaluated():
-                logger.warning("[new_evaluation] Submission %d compiled "
+            elif submission_result.compilation_outcome == "ok" \
+                    and not submission_result.evaluated():
+                logger.warning("[new_evaluation] Submission %d(%d) compiled "
                                "correctly but is not evaluated."
-                               % submission_id)
+                               % (submission_id, dataset_version))
                 return
             elif submission.user.hidden:
                 logger.info("[new_evaluation] Submission %d not scored "
@@ -658,30 +673,31 @@ class ScoringService(Service):
 
             # Assign score to the submission.
             scorer = self.scorers[submission.task_id]
-            scorer.add_submission(submission_id, submission.timestamp,
+            scorer.add_submission(submission_id, dataset_version,
+                                  submission.timestamp,
                                   submission.user.username,
-                                  submission.evaluated(),
+                                  submission_result.evaluated(),
                                   dict((ev.num,
                                         {"outcome": ev.outcome,
                                          "text": ev.text,
                                          "time": ev.execution_time,
                                          "memory": ev.memory_used})
-                                       for ev in submission.evaluations),
+                                       for ev in submission_result.evaluations),
                                   submission.tokened())
 
             # Mark submission as scored.
             self.submission_ids_scored.add(submission_id)
 
             # Filling submission's score info in the db.
-            submission.score = scorer.pool[submission_id]["score"]
-            submission.public_score = \
+            submission_result.score = scorer.pool[submission_id]["score"]
+            submission_result.public_score = \
                 scorer.pool[submission_id]["public_score"]
 
             # And details.
-            submission.score_details = scorer.pool[submission_id]["details"]
-            submission.public_score_details = \
+            submission_result.score_details = scorer.pool[submission_id]["details"]
+            submission_result.public_score_details = \
                 scorer.pool[submission_id]["public_details"]
-            submission.ranking_score_details = \
+            submission_result.ranking_score_details = \
                 scorer.pool[submission_id]["ranking_details"]
 
             # Data to send to remote rankings.
@@ -696,8 +712,8 @@ class ScoringService(Service):
                 "submission": encode_id(submission_id),
                 "time": int(make_timestamp(submission.timestamp)),
                 # We're sending the unrounded score to RWS
-                "score": submission.score,
-                "extra": submission.ranking_score_details}
+                "score": submission_result.score,
+                "extra": submission_result.ranking_score_details}
 
         # TODO: ScoreRelative here does not work with remote
         # rankings (it does in the ranking view) because we

@@ -196,6 +196,13 @@ class Task(Base):
         Integer,
         nullable=True)
 
+    # Provide easy access to the active dataset object.
+    active_dataset = relationship(
+        'Dataset',
+        primaryjoin='Task.id==Dataset.task_id and Task.active_dataset_version==Dataset.version',
+        uselist=False,
+    )
+
     # Follows the description of the fields automatically added by
     # SQLAlchemy.
     # submission_format (list of SubmissionFormatElement objects)

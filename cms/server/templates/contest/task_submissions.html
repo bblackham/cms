@@ -242,6 +242,7 @@ $(document).ready(function () {
     {% else %}
         {% for s_idx, s in enumerate(sorted(submissions, key=lambda s: s.timestamp, reverse=True)) %}
             {% set s_idx = len(submissions) - s_idx %}
+            {% set sr = s.results.get(s.task.active_dataset_version, None) %}
             {% include submission_row.html %}
         {% end %}
     {% end %}

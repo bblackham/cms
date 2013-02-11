@@ -102,7 +102,10 @@ class CompilationJob(Job):
         self.plus = plus
 
     @staticmethod
-    def from_submission(submission):
+    def from_submission(submission, dataset_version=None):
+        if dataset_version is None:
+            dataset_version = submission.task.active_dataset_version
+
         job = CompilationJob()
 
         # Job
@@ -229,7 +232,10 @@ class EvaluationJob(Job):
         self.get_output = get_output
 
     @staticmethod
-    def from_submission(submission):
+    def from_submission(submission, dataset_version=None):
+        if dataset_version is None:
+            dataset_version = submission.task.active_dataset_version
+
         job = EvaluationJob()
 
         # Job
@@ -237,10 +243,15 @@ class EvaluationJob(Job):
         job.task_type_parameters = json.loads(
             submission.task.task_type_parameters)
 
+        # This should have been created by now.
+        assert submission.results.get(dataset_version) is not None
+
+        submission_results = submission.results[dataset_version]
+
         # EvaluationJob; dict() is required to detach the dictionary
         # that gets added to the Job from the control of SQLAlchemy
-        job.executables = dict(submission.executables)
-        job.testcases = submission.task.testcases
+        job.executables = dict(submission_results.executables)
+        job.testcases = submission.task.active_dataset.testcases
         job.time_limit = submission.task.time_limit
         job.memory_limit = submission.task.memory_limit
         job.managers = dict(submission.task.managers)

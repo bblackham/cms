@@ -24,11 +24,12 @@ import simplejson as json
 from cms import logger, plugin_lookup
 
 
-def get_score_type(submission=None, task=None):
+def get_score_type(submission=None, task=None, dataset_version=None):
     """Given a task, istantiate the corresponding ScoreType class.
 
     submission (Submission): the submission that needs the task type.
     task (Task): the task we want to score.
+    dataset_version (int): the dataset version to use, or None for active.
 
     return (object): an instance of the correct ScoreType class.
 
@@ -41,6 +42,9 @@ def get_score_type(submission=None, task=None):
     if submission is not None:
         task = submission.task
 
+    if dataset_version is None:
+        dataset_version = task.active_dataset_version
+
     score_type_name = task.score_type
     try:
         score_type_parameters = json.loads(task.score_type_parameters)
@@ -48,7 +52,7 @@ def get_score_type(submission=None, task=None):
         logger.error("Cannot decode score type parameters.\n%r." % error)
         raise
     public_testcases = dict((testcase.num, testcase.public)
-                            for testcase in task.testcases)
+                            for testcase in task.active_dataset.testcases)
 
     cls = plugin_lookup(score_type_name,
                         "cms.grading.scoretypes", "scoretypes")

@@ -184,12 +184,13 @@ class AbstractSubmission:
 
 class AbstractSubmissionFromDB:
 
-    def __init__(self, submission, file_cacher):
+    def __init__(self, submission_result, file_cacher):
         """Create an AbstractSubmission that shadows the specified
         submission object from the database.
 
         """
-        self.submission = submission
+        self.submission_result = submission_result
+        self.submission = submission_result.submission
         self.file_cacher = file_cacher
 
     def get_task(self):
@@ -227,7 +228,7 @@ class AbstractSubmissionFromDB:
         """
         try:
             self.file_cacher.get_file(
-                self.submission.executables[filename].digest,
+                self.submission_result.executables[filename].digest,
                 file_obj=file_obj)
             return True
         except KeyError:
@@ -241,7 +242,8 @@ class AbstractSubmissionFromDB:
         """
         digest = self.file_cacher.put_file(self, description=description,
                                            file_obj=file_obj)
-        if filename in self.submission.executables:
-            del self.submission.executables[filename]
-        self.submission.sa_session.add(Executable(filename, digest,
-                                                  submission=self.submission))
+        if filename in self.submission_result.executables:
+            del self.submission_result.executables[filename]
+        self.submission_result.sa_session.add(
+            Executable(filename, digest,
+                       submission_result=self.submission_result))
