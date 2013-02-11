@@ -886,7 +886,7 @@ class RenameDatasetHandler(BaseHandler):
                 make_datetime(),
                 "Renaming dataset failed",
                 repr(error))
-            self.redirect("/rename_dataset/%s/%d" % (task_id, dataset_version))
+            self.redirect("/rename_dataset/%s/%s" % (task_id, dataset_version))
             return
 
         self.redirect("/task/%s" % task_id)
