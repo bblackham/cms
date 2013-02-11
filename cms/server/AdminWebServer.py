@@ -40,7 +40,7 @@ from cms.async import ServiceCoord, get_service_shards, get_service_address
 from cms.db.FileCacher import FileCacher
 from cms.db.SQLAlchemyAll import Session, \
     Contest, User, Announcement, Question, Message, Submission, File, Task, \
-    Attachment, Manager, Testcase, SubmissionFormatElement, Statement
+    Dataset, Attachment, Manager, Testcase, SubmissionFormatElement, Statement
 from cms.grading.tasktypes import get_task_type
 from cms.server import file_handler_gen, get_url_root, \
     CommonRequestHandler
@@ -785,18 +785,164 @@ class DeleteManagerHandler(BaseHandler):
         self.redirect("/task/%s" % task.id)
 
 
-class AddTestcaseHandler(BaseHandler):
-    """Add a testcase to a task.
+class AddDatasetHandler(BaseHandler):
+    """Add a dataset to a task.
 
     """
-    def get(self, task_id):
+    def get(self, task_id, dataset_version_to_copy):
         task = self.safe_get_item(Task, task_id)
+
+        # We can either clone an existing dataset, or '-' for a new one.
+        try:
+            v = int(dataset_version_to_copy)
+            original_dataset = self.safe_get_item(Dataset, (task_id, v))
+            description = "Copy of %s" % original_dataset.description
+        except ValueError:
+            if dataset_version_to_copy == '-':
+                original_dataset = None
+                description = "Default"
+            else:
+                raise tornado.web.HTTPError(404)
+
+        self.r_params = self.render_params()
+        self.r_params["task"] = task
+        self.r_params["clone_id"] = dataset_version_to_copy
+        self.r_params["original_dataset"] = original_dataset
+        self.r_params["default_description"] = description
+        self.render("add_dataset.html", **self.r_params)
+
+    def post(self, task_id, dataset_version_to_copy):
+        # As in get(), we can either clone an existing dataset, or '-' for a
+        # new one.
+        try:
+            v = int(dataset_version_to_copy)
+            original_dataset = self.safe_get_item(Dataset, (task_id, v))
+        except ValueError:
+            if dataset_version_to_copy == '-':
+                original_dataset = None
+            else:
+                raise tornado.web.HTTPError(404)
+
+        description = self.get_argument("description", "")
+
+        task = self.safe_get_item(Task, task_id)
+        dataset = Dataset(task, description=description)
+        self.sql_session.add(dataset)
+
+        # If we were cloning the dataset, copy all testcases across too.
+        if original_dataset is not None:
+            for testcase in original_dataset.testcases:
+                self.sql_session.add(Testcase(
+                    testcase.input,
+                    testcase.output,
+                    testcase.num,
+                    testcase.public,
+                    dataset))
+
+        # If the task does not yet have an active dataset, make this
+        # one active.
+        if task.active_dataset_version == None:
+            task.active_dataset_version = dataset.version
+
+        try:
+            self.sql_session.commit()
+        except IntegrityError as error:
+            self.application.service.add_notification(
+                make_datetime(),
+                "Dataset creation failed",
+                repr(error))
+            self.redirect("/add_dataset/%s/%s" % (
+                task_id, dataset_version_to_copy))
+            return
+
+        self.redirect("/task/%s" % task_id)
+
+
+class RenameDatasetHandler(BaseHandler):
+    """Rename the descripton of a dataset.
+
+    """
+    def get(self, task_id, dataset_version):
+        task = self.safe_get_item(Task, task_id)
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+
+        self.r_params = self.render_params()
+        self.r_params["task"] = task
+        self.r_params["dataset"] = dataset
+        self.render("rename_dataset.html", **self.r_params)
+
+    def post(self, task_id, dataset_version):
+        description = self.get_argument("description", "")
+        self.sql_session.close()
+
+        self.sql_session = Session()
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+        dataset.description = description
+
+        try:
+            self.sql_session.commit()
+        except IntegrityError as error:
+            self.application.service.add_notification(
+                make_datetime(),
+                "Renaming dataset failed",
+                repr(error))
+            self.redirect("/rename_dataset/%s/%d" % (task_id, dataset_version))
+            return
+
+        self.redirect("/task/%s" % task_id)
+
+
+class DeleteDatasetHandler(BaseHandler):
+    """Delete a dataset from a task.
+
+    """
+    def get(self, task_id, dataset_version):
+        task = self.safe_get_item(Task, task_id)
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+
         self.contest = task.contest
         self.r_params = self.render_params()
         self.r_params["task"] = task
+        self.r_params["dataset"] = dataset
+        self.render("delete_dataset.html", **self.r_params)
+
+    def post(self, task_id, dataset_version):
+        self.sql_session.close()
+
+        self.sql_session = Session()
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+        self.sql_session.delete(dataset)
+        self.sql_session.commit()
+
+        self.redirect("/task/%s" % task_id)
+
+
+class ActivateDatasetHandler(BaseHandler):
+    """Set a given dataset to be the active one for a task.
+
+    """
+    def get(self, task_id, dataset_version):
+        task = self.safe_get_item(Task, task_id)
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+        task.active_dataset_version = dataset.version
+        self.sql_session.commit()
+        self.redirect("/task/%s" % task.id)
+
+
+class AddTestcaseHandler(BaseHandler):
+    """Add a testcase to a dataset.
+
+    """
+    def get(self, task_id, dataset_version):
+        task = self.safe_get_item(Task, task_id)
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+        self.contest = task.contest
+        self.r_params = self.render_params()
+        self.r_params["task"] = task
+        self.r_params["dataset"] = dataset
         self.render("add_testcase.html", **self.r_params)
 
-    def post(self, task_id):
+    def post(self, task_id, dataset_version):
         task = self.safe_get_item(Task, task_id)
         self.contest = task.contest
         try:
@@ -806,7 +952,7 @@ class AddTestcaseHandler(BaseHandler):
                 make_datetime(),
                 "Invalid data",
                 "Please give a numerical value for the position.")
-            self.redirect("/add_testcase/%s" % task_id)
+            self.redirect("/add_testcase/%s/%s" % (task_id, dataset_version))
             return
 
         try:
@@ -817,7 +963,7 @@ class AddTestcaseHandler(BaseHandler):
                 make_datetime(),
                 "Invalid data",
                 "Please fill both input and output.")
-            self.redirect("/add_testcase/%s" % task_id)
+            self.redirect("/add_testcase/%s/%s" % (task_id, dataset_version))
             return
 
         public = self.get_argument("public", None) is not None
@@ -836,14 +982,15 @@ class AddTestcaseHandler(BaseHandler):
                 make_datetime(),
                 "Testcase storage failed",
                 repr(error))
-            self.redirect("/add_testcase/%s" % task_id)
+            self.redirect("/add_testcase/%s/%s" % (task_id, dataset_version))
             return
 
         self.sql_session = Session()
         task = self.safe_get_item(Task, task_id)
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
         self.contest = task.contest
         self.sql_session.add(Testcase(
-            num, public, input_digest, output_digest, task=task))
+            num, public, input_digest, output_digest, task=task, dataset=dataset))
 
         try:
             self.sql_session.commit()
@@ -852,7 +999,7 @@ class AddTestcaseHandler(BaseHandler):
                 make_datetime(),
                 "Testcase storage failed",
                 repr(error))
-            self.redirect("/add_testcase/%s" % task_id)
+            self.redirect("/add_testcase/%s/%s" % (task_id, dataset_version))
             return
 
         self.redirect("/task/%s" % task_id)
@@ -864,7 +1011,7 @@ class DeleteTestcaseHandler(BaseHandler):
     """
     def get(self, testcase_id):
         testcase = self.safe_get_item(Testcase, testcase_id)
-        task = testcase.task
+        task = testcase.dataset.task
         self.contest = task.contest
         self.sql_session.delete(testcase)
         self.sql_session.commit()
@@ -993,7 +1140,7 @@ class AddTaskHandler(BaseHandler):
             statements = {}
             attachments = {}
             managers = {}
-            testcases = []
+            datasets = []
 
         except Exception as error:
             self.application.service.add_notification(
@@ -1015,7 +1162,7 @@ class AddTaskHandler(BaseHandler):
                     score_precision, contest=self.contest,
                     statements=statements, attachments=attachments,
                     submission_format=submission_format, managers=managers,
-                    testcases=testcases)
+                    datasets=datasets, testcases=testcases)
         self.sql_session.add(task)
 
         if try_commit(self.sql_session, self):
@@ -1585,7 +1732,11 @@ _aws_handlers = [
     (r"/delete_attachment/([0-9]+)",   DeleteAttachmentHandler),
     (r"/add_manager/([0-9]+)",         AddManagerHandler),
     (r"/delete_manager/([0-9]+)",      DeleteManagerHandler),
-    (r"/add_testcase/([0-9]+)",        AddTestcaseHandler),
+    (r"/add_dataset/([0-9]+)/(-|[0-9]+)", AddDatasetHandler),
+    (r"/rename_dataset/([0-9]+)/([0-9]+)", RenameDatasetHandler),
+    (r"/delete_dataset/([0-9]+)/([0-9]+)", DeleteDatasetHandler),
+    (r"/activate_dataset/([0-9]+)/([0-9]+)", ActivateDatasetHandler),
+    (r"/add_testcase/([0-9]+)/([0-9]+)", AddTestcaseHandler),
     (r"/delete_testcase/([0-9]+)",     DeleteTestcaseHandler),
     (r"/user/([0-9]+)",   UserViewHandler),
     (r"/add_user/([0-9]+)",       AddUserHandler),
