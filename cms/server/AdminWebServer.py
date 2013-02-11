@@ -1332,7 +1332,7 @@ class TaskHandler(BaseHandler):
                 task.score_precision,
                 allow_empty=False)
 
-            for dataset in task.datasets:
+            for dataset in task.datasets.itervalues():
                 for testcase in dataset.testcases:
                     testcase.public = bool(self.get_argument(
                         "testcase_%s_public" % testcase.num, False))
