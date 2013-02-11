@@ -475,6 +475,7 @@ class AddContestHandler(BaseHandler):
                 allow_empty=False)
 
         except Exception as error:
+            logger.warning("Invalid field: %s" % (traceback.format_exc()))
             self.application.service.add_notification(
                 make_datetime(),
                 "Invalid field(s)",
@@ -602,6 +603,7 @@ class ContestHandler(BaseHandler):
                 allow_empty=False)
 
         except Exception as error:
+            logger.warning("Invalid field: %s" % (traceback.format_exc()))
             self.application.service.add_notification(
                 make_datetime(),
                 "Invalid field(s).",
@@ -1169,6 +1171,7 @@ class AddTaskHandler(BaseHandler):
             datasets = {}
 
         except Exception as error:
+            logger.warning("Invalid field: %s" % (traceback.format_exc()))
             self.application.service.add_notification(
                 make_datetime(),
                 "Invalid field(s)",
@@ -1338,6 +1341,7 @@ class TaskHandler(BaseHandler):
                         "testcase_%s_public" % testcase.num, False))
 
         except Exception as error:
+            logger.warning("Invalid field: %s" % (traceback.format_exc()))
             self.application.service.add_notification(
                 make_datetime(),
                 "Invalid field(s)",
