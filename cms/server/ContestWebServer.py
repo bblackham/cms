@@ -931,7 +931,7 @@ class SubmitHandler(BaseHandler):
         # This ensure that the user sent one file for every name in
         # submission format and no more. Less is acceptable if task
         # type says so.
-        task_type = get_task_type(task=task)
+        task_type = get_task_type(dataset=task.active_dataset)
         required = set([x.filename for x in task.submission_format])
         provided = set(self.request.files.keys())
         if not (required == provided or (task_type.ALLOW_PARTIAL_SUBMISSION
@@ -1327,7 +1327,7 @@ class UserTestHandler(BaseHandler):
             raise tornado.web.HTTPError(404)
 
         # Check that the task is testable
-        task_type = get_task_type(task=task)
+        task_type = get_task_type(dataset=task.active_dataset)
         if not task_type.testable:
             logger.warning("User %s tried to make test on task %s." %
                            (self.current_user.username, task_name))

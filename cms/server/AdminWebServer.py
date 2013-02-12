@@ -94,6 +94,35 @@ def valid_ip(ip_address):
     return True
 
 
+def sanity_check_time_limit(time_limit):
+    if time_limit == "":
+        time_limit = None
+    else:
+        time_limit = float(time_limit)
+        assert 0 <= time_limit < float("+inf"), \
+            "Time limit out of range."
+    return time_limit
+
+
+def sanity_check_memory_limit(memory_limit):
+    if memory_limit == "":
+        memory_limit = None
+    else:
+        memory_limit = int(memory_limit)
+        assert 0 < memory_limit, "Invalid memory limit."
+    return memory_limit
+
+
+def sanity_check_task_type_class(task_type):
+    # Look for a task type with the specified name.
+    try:
+        task_type_class = get_task_type(task_type_name=task_type)
+    except KeyError:
+        # Task type not found.
+        raise ValueError("Task type not recognized: %s." % task_type)
+    return task_type_class
+
+
 class BaseHandler(CommonRequestHandler):
     """Base RequestHandler for this application.
 
@@ -743,15 +772,18 @@ class AddManagerHandler(BaseHandler):
     """Add a manager to a task.
 
     """
-    def get(self, task_id):
-        task = self.safe_get_item(Task, task_id)
+    def get(self, task_id, dataset_version):
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+        task = dataset.task
         self.contest = task.contest
         self.r_params = self.render_params()
         self.r_params["task"] = task
+        self.r_params["dataset"] = dataset
         self.render("add_manager.html", **self.r_params)
 
-    def post(self, task_id):
-        task = self.safe_get_item(Task, task_id)
+    def post(self, task_id, dataset_version):
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+        task = dataset.task
         self.contest = task.contest
         manager = self.request.files["manager"][0]
         task_name = task.name
@@ -766,12 +798,12 @@ class AddManagerHandler(BaseHandler):
                 make_datetime(),
                 "Manager storage failed",
                 repr(error))
-            self.redirect("/add_manager/%s" % task_id)
+            self.redirect("/add_manager/%s/%s" % (task_id, dataset_version))
             return
 
         self.sql_session = Session()
-        task = self.safe_get_item(Task, task_id)
-        self.sql_session.add(Manager(manager["filename"], digest, task=task))
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+        self.sql_session.add(Manager(manager["filename"], digest, dataset=dataset))
         self.sql_session.commit()
         self.redirect("/task/%s" % task_id)
 
@@ -790,9 +822,9 @@ class DeleteManagerHandler(BaseHandler):
 
 
 # TODO: Move this somewhere more appropriate?
-def copy_dataset(new_dataset, old_dataset, clone_results, sql_session):
+def copy_dataset(new_dataset, old_dataset, clone_results, clone_managers, sql_session):
     """Copy an existing dataset's test cases, and optionally
-    submission results.
+    submission results and managers.
 
     new_dataset (Dataset): target dataset to copy into.
     old_dataset (Dataset): original dataset to copy from.
@@ -810,65 +842,70 @@ def copy_dataset(new_dataset, old_dataset, clone_results, sql_session):
             dataset=new_dataset))
     sql_session.flush()
 
-    if not clone_results:
-        # If all we wanted was to duplicate the dataset, we can stop
-        # here.
-        return
+    if clone_managers:
+        managers = sql_session.query(Manager).\
+                filter(and_(
+                    Manager.task_id == old_dataset.task_id,
+                    Manager.dataset_version == old_dataset.version)).\
+                all()
+        for old in managers:
+            # Create the submission result.
+            new = Manager(
+                digest=old.digest,
+                filename=old.filename,
+                dataset=new_dataset)
+            sql_session.add(new)
 
-    # For each submission result on the old dataset, copy recursively.
-    results = sql_session.query(SubmissionResult).\
-            join(Executable).\
+    if clone_results:
+        # For each submission result on the old dataset, copy recursively.
+        results = sql_session.query(SubmissionResult).\
             filter(and_(
-                Executable.submission_id == SubmissionResult.submission_id,
-                Executable.dataset_version == old_dataset.version)).\
-            join(Evaluation).\
-            filter(and_(
-                Evaluation.submission_id == SubmissionResult.submission_id,
-                Evaluation.dataset_version == old_dataset.version)).\
+                SubmissionResult.task_id == old_dataset.task_id,
+                SubmissionResult.dataset_version == old_dataset.version)).\
             all()
-    for sr in results:
-        # TODO: Brrr. Would be better to use export_to_dict/import_from_dict.
-        # Create the submission result.
-        new_sr = SubmissionResult(
-            submission=sr.submission,
-            task_id=sr.task_id,
-            dataset=new_dataset,
-            compilation_outcome=sr.compilation_outcome,
-            compilation_text=sr.compilation_text,
-            compilation_tries=sr.compilation_tries,
-            compilation_shard=sr.compilation_shard,
-            compilation_sandbox=sr.compilation_sandbox,
-            evaluation_outcome=sr.evaluation_outcome,
-            evaluation_tries=sr.evaluation_tries,
-            score=sr.score,
-            score_details=sr.score_details,
-            public_score=sr.public_score,
-            public_score_details=sr.public_score_details,
-            ranking_score_details=sr.ranking_score_details)
-        sql_session.add(new_sr)
-        sql_session.flush()
+        for sr in results:
+            # TODO: Brrr. Would be better to use export_to_dict/import_from_dict.
+            # Create the submission result.
+            new_sr = SubmissionResult(
+                submission=sr.submission,
+                task_id=sr.task_id,
+                dataset=new_dataset,
+                compilation_outcome=sr.compilation_outcome,
+                compilation_text=sr.compilation_text,
+                compilation_tries=sr.compilation_tries,
+                compilation_shard=sr.compilation_shard,
+                compilation_sandbox=sr.compilation_sandbox,
+                evaluation_outcome=sr.evaluation_outcome,
+                evaluation_tries=sr.evaluation_tries,
+                score=sr.score,
+                score_details=sr.score_details,
+                public_score=sr.public_score,
+                public_score_details=sr.public_score_details,
+                ranking_score_details=sr.ranking_score_details)
+            sql_session.add(new_sr)
+            sql_session.flush()
 
-        # Create executables.
-        for e in sr.executables.itervalues():
-            new_e = Executable(
-                digest=e.digest,
-                filename=e.filename,
-                submission_result=new_sr)
-            sql_session.add(new_e)
+            # Create executables.
+            for e in sr.executables.itervalues():
+                new_e = Executable(
+                    digest=e.digest,
+                    filename=e.filename,
+                    submission_result=new_sr)
+                sql_session.add(new_e)
 
-        # Create evalutions.
-        for e in sr.evaluations:
-            new_e = Evaluation(
-                text=e.text,
-                outcome=e.outcome,
-                num=e.num,
-                submission_result=new_sr,
-                memory_used=e.memory_used,
-                execution_time=e.execution_time,
-                execution_wall_clock_time=e.execution_wall_clock_time,
-                evaluation_shard=e.evaluation_shard,
-                evaluation_sandbox=e.evaluation_sandbox)
-            sql_session.add(new_e)
+            # Create evalutions.
+            for e in sr.evaluations:
+                new_e = Evaluation(
+                    text=e.text,
+                    outcome=e.outcome,
+                    num=e.num,
+                    submission_result=new_sr,
+                    memory_used=e.memory_used,
+                    execution_time=e.execution_time,
+                    execution_wall_clock_time=e.execution_wall_clock_time,
+                    evaluation_shard=e.evaluation_shard,
+                    evaluation_sandbox=e.evaluation_sandbox)
+                sql_session.add(new_e)
 
     sql_session.flush()
 
@@ -896,6 +933,9 @@ class AddDatasetHandler(BaseHandler):
         self.r_params["task"] = task
         self.r_params["clone_id"] = dataset_version_to_copy
         self.r_params["original_dataset"] = original_dataset
+        self.r_params["original_dataset_task_type_parameters"] = \
+            json.loads(original_dataset.task_type_parameters) \
+            if original_dataset is not None else None
         self.r_params["default_description"] = description
         self.render("add_dataset.html", **self.r_params)
 
@@ -926,8 +966,36 @@ class AddDatasetHandler(BaseHandler):
                     task_id, dataset_version_to_copy))
                 return
 
+        try:
+            time_limit = sanity_check_time_limit(
+                self.get_argument("time_limit", ""))
+            memory_limit = sanity_check_memory_limit(
+                self.get_argument("memory_limit", ""))
+            task_type = self.get_argument("task_type", "")
+            task_type_class = sanity_check_task_type_class(task_type)
+            task_type_parameters = json.dumps(
+                task_type_class.parse_handler(
+                    self, "TaskTypeOptions_%s_" % task_type))
+            score_type = self.get_argument("score_type", "")
+            score_type_parameters = self.get_argument("score_type_parameters",
+                                                      "")
+            managers = {}
+
+        except Exception as error:
+            logger.warning("Invalid field: %s" % (traceback.format_exc()))
+            self.application.service.add_notification(
+                make_datetime(),
+                "Invalid field(s)",
+                repr(error))
+            self.redirect("/add_dataset/%s/%s" % (task_id,
+                dataset_version_to_copy))
+            return
+
         # Add new dataset.
-        dataset = Dataset(task, description=description)
+        dataset = Dataset(task,
+            time_limit, memory_limit, task_type, task_type_parameters,
+            score_type, score_type_parameters, managers,
+            description=description)
         self.sql_session.add(dataset)
         self.sql_session.flush()
 
@@ -936,7 +1004,9 @@ class AddDatasetHandler(BaseHandler):
             # too.  If the user insists, clone all evaluation
             # information too.
             clone_results = bool(self.get_argument("clone_results", False))
-            copy_dataset(dataset, original_dataset, clone_results,
+            clone_managers = bool(self.get_argument("clone_managers", False))
+            copy_dataset(dataset, original_dataset,
+                clone_results, clone_managers,
                 self.sql_session)
 
         try:
@@ -954,8 +1024,8 @@ class AddDatasetHandler(BaseHandler):
 
         # If the task does not yet have an active dataset, make this
         # one active.
-        if task.active_dataset_version == None:
-            task.active_dataset_version = dataset.version
+        if task.active_dataset == None:
+            task.active_dataset = dataset
             self.sql_session.commit()
 
         self.redirect("/task/%s" % task_id)
@@ -1041,7 +1111,7 @@ class ActivateDatasetHandler(BaseHandler):
     def get(self, task_id, dataset_version):
         task = self.safe_get_item(Task, task_id)
         dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
-        task.active_dataset_version = dataset.version
+        task.active_dataset = dataset
         self.sql_session.commit()
         self.application.service.scoring_service.reinitialize()
 
@@ -1121,7 +1191,7 @@ class AddTestcaseHandler(BaseHandler):
         dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
         self.contest = task.contest
         self.sql_session.add(Testcase(
-            num, public, input_digest, output_digest, task=task, dataset=dataset))
+            num, public, input_digest, output_digest, dataset=dataset))
 
         try:
             self.sql_session.commit()
@@ -1168,34 +1238,6 @@ class AddTaskHandler(BaseHandler):
 
             primary_statements = self.get_argument("primary_statements", "[]")
 
-            time_limit = self.get_argument("time_limit", "")
-            if time_limit == "":
-                time_limit = None
-            else:
-                time_limit = float(time_limit)
-                assert 0 <= time_limit < float("+inf"), \
-                    "Time limit out of range."
-
-            memory_limit = self.get_argument("memory_limit", "")
-            if memory_limit == "":
-                memory_limit = None
-            else:
-                memory_limit = int(memory_limit)
-                assert 0 < memory_limit, "Invalid memory limit."
-
-            task_type = self.get_argument("task_type", "")
-            # Look for a task type with the specified name.
-            try:
-                task_type_class = get_task_type(task_type_name=task_type)
-            except KeyError:
-                # Task type not found.
-                raise ValueError("Task type not recognized: %s." % task_type)
-
-            task_type_parameters = task_type_class.parse_handler(
-                self, "TaskTypeOptions_%s_" % task_type)
-
-            task_type_parameters = json.dumps(task_type_parameters)
-
             submission_format_choice = self.get_argument(
                 "submission_format_choice", "")
 
@@ -1217,10 +1259,6 @@ class AddTaskHandler(BaseHandler):
                         raise ValueError("Submission format not recognized.")
             else:
                 raise ValueError("Submission format not recognized.")
-
-            score_type = self.get_argument("score_type", "")
-            score_type_parameters = self.get_argument("score_type_parameters",
-                                                      "")
 
             token_initial = self.get_non_negative_int(
                 "token_initial",
@@ -1272,9 +1310,22 @@ class AddTaskHandler(BaseHandler):
 
             statements = {}
             attachments = {}
-            managers = {}
             datasets = {}
 
+            # These belong to the first dataset.
+            time_limit = sanity_check_time_limit(
+                self.get_argument("time_limit", ""))
+            memory_limit = sanity_check_memory_limit(
+                self.get_argument("memory_limit", ""))
+            task_type = self.get_argument("task_type", "")
+            task_type_class = sanity_check_task_type_class(task_type)
+            task_type_parameters = json.dumps(
+                task_type_class.parse_handler(
+                    self, "TaskTypeOptions_%s_" % task_type))
+            score_type = self.get_argument("score_type", "")
+            score_type_parameters = self.get_argument("score_type_parameters",
+                                                      "")
+            managers = {}
         except Exception as error:
             logger.warning("Invalid field: %s" % (traceback.format_exc()))
             self.application.service.add_notification(
@@ -1286,18 +1337,24 @@ class AddTaskHandler(BaseHandler):
 
         task = Task(len(self.contest.tasks),
                     name, title, primary_statements,
-                    time_limit, memory_limit,
-                    task_type, task_type_parameters,
-                    score_type, score_type_parameters,
                     token_initial, token_max, token_total,
                     token_min_interval, token_gen_time, token_gen_number,
                     max_submission_number, max_user_test_number,
                     min_submission_interval, min_user_test_interval,
                     score_precision, contest=self.contest,
                     statements=statements, attachments=attachments,
-                    submission_format=submission_format, managers=managers,
-                    datasets=datasets, testcases=testcases)
+                    submission_format=submission_format,
+                    datasets=datasets)
         self.sql_session.add(task)
+
+        # Create its first dataset.
+        dataset = Dataset(task, time_limit, memory_limit, task_type,
+            task_type_parameters, score_type, score_type_parameters,
+            managers, description='Default')
+        self.sql_session.add(dataset)
+
+        # Make the dataset active. Life works better that way.
+        task.active_dataset = dataset
 
         if try_commit(self.sql_session, self):
             self.application.service.scoring_service.reinitialize()
@@ -1333,40 +1390,6 @@ class TaskHandler(BaseHandler):
             task.primary_statements = self.get_argument(
                 "primary_statements", task.primary_statements)
 
-            task.time_limit = self.get_argument(
-                "time_limit",
-                str(task.time_limit) if task.time_limit is not None else "")
-            if task.time_limit == "":
-                task.time_limit = None
-            else:
-                task.time_limit = float(task.time_limit)
-                assert 0 <= task.time_limit < float("+inf"), \
-                    "Time limit out of range."
-
-            task.memory_limit = self.get_argument(
-                "memory_limit",
-                str(task.memory_limit)
-                if task.memory_limit is not None else "")
-            if task.memory_limit == "":
-                task.memory_limit = None
-            else:
-                task.memory_limit = int(task.memory_limit)
-                assert 0 < task.memory_limit, "Invalid memory limit."
-
-            task.task_type = self.get_argument("task_type", "")
-            # Look for a task type with the specified name.
-            try:
-                task_type_class = get_task_type(task_type_name=task.task_type)
-            except KeyError:
-                # Task type not found.
-                raise ValueError("Task type not recognized: %s." %
-                                 task.task_type)
-
-            task.task_type_parameters = task_type_class.parse_handler(
-                self, "TaskTypeOptions_%s_" % task.task_type)
-
-            task.task_type_parameters = json.dumps(task.task_type_parameters)
-
             # submission_format_choice == "other"
             submission_format = self.get_argument("submission_format", "")
             if submission_format not in ["", "[]"] and submission_format != \
@@ -1385,10 +1408,37 @@ class TaskHandler(BaseHandler):
                     logger.info(repr(error))
                     raise ValueError("Submission format not recognized.")
 
-            task.score_type = self.get_argument("score_type",
-                                                task.score_type)
-            task.score_type_parameters = self.get_argument(
-                "score_type_parameters", task.score_type_parameters)
+            for dataset in task.datasets.itervalues():
+                dataset.time_limit = sanity_check_time_limit(
+                    self.get_argument("time_limit_%d" % dataset.version,
+                        str(dataset.time_limit)
+                            if dataset.time_limit is not None else ""))
+
+                dataset.memory_limit = sanity_check_memory_limit(
+                    self.get_argument("memory_limit_%d" % dataset.version,
+                    str(dataset.memory_limit)
+                        if dataset.memory_limit is not None else ""))
+
+                dataset.task_type = self.get_argument(
+                    "task_type_%d" % dataset.version, "")
+                # Look for a task type with the specified name.
+                task_type_class = sanity_check_task_type_class(dataset.task_type)
+
+                dataset.task_type_parameters = json.dumps(
+                    task_type_class.parse_handler(
+                        self, "TaskTypeOptions_%s_%d_" % (
+                            dataset.task_type, dataset.version)))
+
+                dataset.score_type = self.get_argument(
+                    "score_type_%d" % dataset.version, dataset.score_type)
+                dataset.score_type_parameters = self.get_argument(
+                    "score_type_parameters_%d" % dataset.version,
+                    dataset.score_type_parameters)
+
+                for testcase in dataset.testcases:
+                    testcase.public = bool(self.get_argument(
+                        "testcase_%s_%s_public" % (
+                            dataset.version, testcase.num), False))
 
             task.token_initial = self.get_non_negative_int(
                 "token_initial",
@@ -1439,12 +1489,6 @@ class TaskHandler(BaseHandler):
                 "score_precision",
                 task.score_precision,
                 allow_empty=False)
-
-            for dataset in task.datasets.itervalues():
-                for testcase in dataset.testcases:
-                    testcase.public = bool(self.get_argument(
-                        "testcase_%s_%s_public" % (
-                            dataset.version, testcase.num), False))
 
         except Exception as error:
             logger.warning("Invalid field: %s" % (traceback.format_exc()))
@@ -1905,7 +1949,7 @@ _aws_handlers = [
     (r"/delete_statement/([0-9]+)",    DeleteStatementHandler),
     (r"/add_attachment/([0-9]+)",      AddAttachmentHandler),
     (r"/delete_attachment/([0-9]+)",   DeleteAttachmentHandler),
-    (r"/add_manager/([0-9]+)",         AddManagerHandler),
+    (r"/add_manager/([0-9]+)/([0-9]+)", AddManagerHandler),
     (r"/delete_manager/([0-9]+)",      DeleteManagerHandler),
     (r"/add_dataset/([0-9]+)/(-|[0-9]+)", AddDatasetHandler),
     (r"/rename_dataset/([0-9]+)/([0-9]+)", RenameDatasetHandler),

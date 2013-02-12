@@ -272,8 +272,9 @@ class Contest(Base):
                 files.add(_file.digest)
 
             # Enumerate managers
-            for _file in task.managers.values():
-                files.add(_file.digest)
+            for dataset in task.datasets.values():
+                for _file in dataset.managers.values():
+                    files.add(_file.digest)
 
             # Enumerate testcases
             if not light:

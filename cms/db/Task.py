@@ -99,34 +99,6 @@ class Task(Base):
         nullable=False,
         default="[]")
 
-    # Time and memory limits for every testcase.
-    time_limit = Column(
-        Float,
-        nullable=True)
-    memory_limit = Column(
-        Integer,
-        nullable=True)
-
-    # Name of the TaskType child class suited for the task.
-    task_type = Column(
-        String,
-        nullable=False)
-
-    # Parameters for the task type class, JSON encoded.
-    task_type_parameters = Column(
-        String,
-        nullable=False)
-
-    # Name of the ScoreType child class suited for the task.
-    score_type = Column(
-        String,
-        nullable=False)
-
-    # Parameters for the score type class, JSON encoded.
-    score_type_parameters = Column(
-        String,
-        nullable=False)
-
     # Parameter to define the token behaviour. See Contest.py for
     # details. The only change is that these parameters influence the
     # contest in a task-per-task behaviour. To play a token on a given
@@ -208,7 +180,6 @@ class Task(Base):
     # submission_format (list of SubmissionFormatElement objects)
     # datasets (list of Dataset objects)
     # attachments (dict of Attachment objects indexed by filename)
-    # managers (dict of Manager objects indexed by filename)
     # statements (dict of Statement objects indexed by language code)
     # submissions (list of Submission objects)
     # user_tests (list of UserTest objects)
@@ -231,19 +202,10 @@ class Task(Base):
                 'attachments':          [attachment.export_to_dict()
                                          for attachment
                                          in self.attachments.itervalues()],
-                'time_limit':           self.time_limit,
-                'memory_limit':         self.memory_limit,
                 'primary_statements':   self.primary_statements,
-                'task_type':            self.task_type,
-                'task_type_parameters': self.task_type_parameters,
                 'submission_format':    [element.export_to_dict()
                                          for element
                                          in self.submission_format],
-                'managers':             [manager.export_to_dict()
-                                         for manager
-                                         in self.managers.itervalues()],
-                'score_type':           self.score_type,
-                'score_type_parameters': self.score_type_parameters,
                 'datasets':             [dataset.export_to_dict()
                                          for dataset in self.datasets],
                 'token_initial':        self.token_initial,
@@ -276,10 +238,6 @@ class Task(Base):
                                     for attachment in data['attachments']])
         data['submission_format'] = [SubmissionFormatElement.import_from_dict(
             sfe_data) for sfe_data in data['submission_format']]
-        data['managers'] = [Manager.import_from_dict(manager_data)
-                            for manager_data in data['managers']]
-        data['managers'] = dict([(manager.filename, manager)
-                                 for manager in data['managers']])
         data['datasets'] = [Dataset.import_from_dict(dataset_data)
                             for dataset_data in data['datasets']]
         data['statements'] = [Statement.import_from_dict(statement_data)
@@ -347,12 +305,55 @@ class Dataset(Base):
                         cascade="all, delete-orphan",
                         passive_deletes=True))
 
+    # Time and memory limits for every testcase.
+    time_limit = Column(
+        Float,
+        nullable=True)
+    memory_limit = Column(
+        Integer,
+        nullable=True)
+
+    # Name of the TaskType child class suited for the task.
+    task_type = Column(
+        String,
+        nullable=False)
+
+    # Parameters for the task type class, JSON encoded.
+    task_type_parameters = Column(
+        String,
+        nullable=False)
+
+    # Name of the ScoreType child class suited for the task.
+    score_type = Column(
+        String,
+        nullable=False)
+
+    # Parameters for the score type class, JSON encoded.
+    score_type_parameters = Column(
+        String,
+        nullable=False)
+
     # Follows the description of the fields automatically added by
     # SQLAlchemy.
     # testcases (list of Testcase objects)
+    # managers (dict of Manager objects indexed by filename)
 
-    def __init__(self, task, version=None, description='', autojudge=False):
+    def __init__(self, task,
+        time_limit, memory_limit, task_type, task_type_parameters,
+        score_type, score_type_parameters, managers,
+        version=None, description='', autojudge=False):
+
+        for filename, manager in managers.iteritems():
+            manager.filename = filename
+
         self.task = task
+        self.time_limit = time_limit
+        self.memory_limit = memory_limit
+        self.task_type = task_type
+        self.task_type_parameters = task_type_parameters
+        self.score_type = score_type
+        self.score_type_parameters = score_type_parameters
+        self.managers = managers
         self.version = version
         self.description = description
         self.autojudge = autojudge
@@ -367,7 +368,27 @@ class Dataset(Base):
                 'testcases': [testcase.export_to_dict()
                               for testcase in self.testcases],
                 'autojudge': self.autojudge,
+                'time_limit':           self.time_limit,
+                'memory_limit':         self.memory_limit,
+                'task_type':            self.task_type,
+                'task_type_parameters': self.task_type_parameters,
+                'score_type':           self.score_type,
+                'score_type_parameters': self.score_type_parameters,
+                'managers':             [manager.export_to_dict()
+                                         for manager
+                                         in self.managers.itervalues()],
             }
+
+    @classmethod
+    def import_from_dict(cls, data):
+        """Build the object using data from a dictionary.
+
+        """
+        data['managers'] = [Manager.import_from_dict(manager_data)
+                            for manager_data in data['managers']]
+        data['managers'] = dict([(manager.filename, manager)
+                                 for manager in data['managers']])
+        return cls(**data)
 
 
 class Testcase(Base):
@@ -515,8 +536,12 @@ class Manager(Base):
     """
     __tablename__ = 'managers'
     __table_args__ = (
-        UniqueConstraint('task_id', 'filename',
-                         name='cst_managers_task_id_filename'),
+        UniqueConstraint('task_id', 'dataset_version', 'filename',
+                         name='cst_managers_task_id_dataset_version_filename'),
+        ForeignKeyConstraint(
+            ['task_id', 'dataset_version'],
+            [Dataset.task_id, Dataset.version],
+            onupdate="CASCADE", ondelete="CASCADE"),
         )
 
     # Auto increment primary key.
@@ -532,15 +557,22 @@ class Manager(Base):
         String,
         nullable=False)
 
-    # Task (id and object) owning the manager.
+    # Task of the object owning the manager.
     task_id = Column(
         Integer,
         ForeignKey(Task.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
-    task = relationship(
-        Task,
+    task = relationship(Task)
+
+    # Dataset that this evaluation belongs to.
+    dataset_version = Column(
+        Integer,
+        nullable=True,
+        index=True)
+    dataset = relationship(
+        Dataset,
         backref=backref('managers',
                         collection_class=smart_mapped_collection('filename'),
                         cascade="all, delete-orphan",
