@@ -950,6 +950,8 @@ class AddDatasetHandler(BaseHandler):
                 task_id, dataset_version_to_copy))
             return
 
+        self.application.service.scoring_service.reinitialize()
+
         # If the task does not yet have an active dataset, make this
         # one active.
         if task.active_dataset_version == None:
@@ -1026,6 +1028,8 @@ class DeleteDatasetHandler(BaseHandler):
         dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
         self.sql_session.delete(dataset)
         self.sql_session.commit()
+
+        self.application.service.scoring_service.reinitialize()
 
         self.redirect("/task/%s" % task_id)
 
@@ -1129,6 +1133,7 @@ class AddTestcaseHandler(BaseHandler):
             self.redirect("/add_testcase/%s/%s" % (task_id, dataset_version))
             return
 
+        self.application.service.scoring_service.reinitialize()
         self.redirect("/task/%s" % task_id)
 
 
@@ -1142,6 +1147,7 @@ class DeleteTestcaseHandler(BaseHandler):
         self.contest = task.contest
         self.sql_session.delete(testcase)
         self.sql_session.commit()
+        self.application.service.scoring_service.reinitialize()
         self.redirect("/task/%s" % task.id)
 
 

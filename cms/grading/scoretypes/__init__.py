@@ -51,8 +51,9 @@ def get_score_type(submission=None, task=None, dataset_version=None):
     except json.decoder.JSONDecodeError as error:
         logger.error("Cannot decode score type parameters.\n%r." % error)
         raise
-    public_testcases = dict((testcase.num, testcase.public)
-                            for testcase in task.active_dataset.testcases)
+    public_testcases = dict(
+        (testcase.num, testcase.public)
+        for testcase in task.datasets[dataset_version].testcases)
 
     cls = plugin_lookup(score_type_name,
                         "cms.grading.scoretypes", "scoretypes")

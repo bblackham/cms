@@ -392,13 +392,16 @@ class ScoringService(Service):
             contest = session.query(Contest).\
                       filter_by(id=self.contest_id).first()
             for task in contest.tasks:
-                try:
-                    self.scorers[task.id] = get_score_type(task=task)
-                except Exception as error:
-                    logger.critical("Cannot get score type for task %s: %r" %
-                                    (task.name, error))
-                    logger.critical(traceback.format_exc())
-                    self.exit()
+                for dataset in task.datasets.itervalues():
+                    try:
+                        self.scorers[(task.id, dataset.version)] = \
+                            get_score_type(task=task,
+                            dataset_version=dataset.version)
+                    except Exception as error:
+                        logger.critical("Cannot get score type for task %s(%d): %r" %
+                                        (task.name, dataset.version, error))
+                        logger.critical(traceback.format_exc())
+                        self.exit()
             session.commit()
 
     def search_jobs_not_done(self):
@@ -633,6 +636,7 @@ class ScoringService(Service):
 
         """
         logger.info("Reinitializing rankings.")
+        self.scorers = {}
         self._initialize_scorers()
         with self.operation_queue_lock:
             for ranking in self.rankings:
@@ -676,7 +680,7 @@ class ScoringService(Service):
                 return
 
             # Assign score to the submission.
-            scorer = self.scorers[submission.task_id]
+            scorer = self.scorers[(submission.task_id, dataset_version)]
             scorer.add_submission(submission_id, dataset_version,
                                   submission.timestamp,
                                   submission.user.username,
