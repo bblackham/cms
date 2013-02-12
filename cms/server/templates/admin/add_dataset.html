@@ -17,6 +17,14 @@ You are cloning the dataset "{{ original_dataset.description }}".
         <input type="text" name="description" value="{{ default_description }}"/>
       </td>
     </tr>
+    {% if original_dataset is not None %}
+    <tr>
+      <td>Clone evaluation results</td>
+      <td>
+        <input type="checkbox" name="clone_results" checked/>
+      </td>
+    </tr>
+    {% end %}
   </table>
   <input type="submit" value="Create">
 </form>

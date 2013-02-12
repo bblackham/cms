@@ -30,6 +30,7 @@ import traceback
 
 import base64
 import simplejson as json
+from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
 import tornado.web
 import tornado.locale
@@ -39,8 +40,9 @@ from cms.async.WebAsyncLibrary import WebService
 from cms.async import ServiceCoord, get_service_shards, get_service_address
 from cms.db.FileCacher import FileCacher
 from cms.db.SQLAlchemyAll import Session, \
-    Contest, User, Announcement, Question, Message, Submission, File, Task, \
-    Dataset, Attachment, Manager, Testcase, SubmissionFormatElement, Statement
+    Contest, User, Announcement, Question, Message, Submission, \
+    SubmissionResult, Evaluation, Executable, File, Task, Dataset, \
+    Attachment, Manager, Testcase, SubmissionFormatElement, Statement
 from cms.grading.tasktypes import get_task_type
 from cms.server import file_handler_gen, get_url_root, \
     CommonRequestHandler
@@ -787,6 +789,90 @@ class DeleteManagerHandler(BaseHandler):
         self.redirect("/task/%s" % task.id)
 
 
+# TODO: Move this somewhere more appropriate?
+def copy_dataset(new_dataset, old_dataset, clone_results, sql_session):
+    """Copy an existing dataset's test cases, and optionally
+    submission results.
+
+    new_dataset (Dataset): target dataset to copy into.
+    old_dataset (Dataset): original dataset to copy from.
+    clone_results (bool): copy submission results.
+    handler (BaseHandler): just to extract the information about AWS.
+    sql_session (Session): the session to commit.
+
+    """
+    for testcase in old_dataset.testcases:
+        sql_session.add(Testcase(
+            testcase.num,
+            testcase.public,
+            testcase.input,
+            testcase.output,
+            dataset=new_dataset))
+    sql_session.flush()
+
+    if not clone_results:
+        # If all we wanted was to duplicate the dataset, we can stop
+        # here.
+        return
+
+    # For each submission result on the old dataset, copy recursively.
+    results = sql_session.query(SubmissionResult).\
+            join(Executable).\
+            filter(and_(
+                Executable.submission_id == SubmissionResult.submission_id,
+                Executable.dataset_version == old_dataset.version)).\
+            join(Evaluation).\
+            filter(and_(
+                Evaluation.submission_id == SubmissionResult.submission_id,
+                Evaluation.dataset_version == old_dataset.version)).\
+            all()
+    for sr in results:
+        # TODO: Brrr. Would be better to use export_to_dict/import_from_dict.
+        # Create the submission result.
+        new_sr = SubmissionResult(
+            submission=sr.submission,
+            task_id=sr.task_id,
+            dataset=new_dataset,
+            compilation_outcome=sr.compilation_outcome,
+            compilation_text=sr.compilation_text,
+            compilation_tries=sr.compilation_tries,
+            compilation_shard=sr.compilation_shard,
+            compilation_sandbox=sr.compilation_sandbox,
+            evaluation_outcome=sr.evaluation_outcome,
+            evaluation_tries=sr.evaluation_tries,
+            score=sr.score,
+            score_details=sr.score_details,
+            public_score=sr.public_score,
+            public_score_details=sr.public_score_details,
+            ranking_score_details=sr.ranking_score_details)
+        sql_session.add(new_sr)
+        sql_session.flush()
+
+        # Create executables.
+        for e in sr.executables.itervalues():
+            new_e = Executable(
+                digest=e.digest,
+                filename=e.filename,
+                submission_result=new_sr)
+            sql_session.add(new_e)
+
+        # Create evalutions.
+        for e in sr.evaluations:
+            new_e = Evaluation(
+                text=e.text,
+                outcome=e.outcome,
+                num=e.num,
+                submission_result=new_sr,
+                memory_used=e.memory_used,
+                execution_time=e.execution_time,
+                execution_wall_clock_time=e.execution_wall_clock_time,
+                evaluation_shard=e.evaluation_shard,
+                evaluation_sandbox=e.evaluation_sandbox)
+            sql_session.add(new_e)
+
+    sql_session.flush()
+
+
 class AddDatasetHandler(BaseHandler):
     """Add a dataset to a task.
 
@@ -843,16 +929,15 @@ class AddDatasetHandler(BaseHandler):
         # Add new dataset.
         dataset = Dataset(task, description=description)
         self.sql_session.add(dataset)
+        self.sql_session.flush()
 
-        # If we were cloning the dataset, copy all testcases across too.
         if original_dataset is not None:
-            for testcase in original_dataset.testcases:
-                self.sql_session.add(Testcase(
-                    testcase.input,
-                    testcase.output,
-                    testcase.num,
-                    testcase.public,
-                    dataset))
+            # If we were cloning the dataset, copy all testcases across
+            # too.  If the user insists, clone all evaluation
+            # information too.
+            clone_results = bool(self.get_argument("clone_results", False))
+            copy_dataset(dataset, original_dataset, clone_results,
+                self.sql_session)
 
         try:
             self.sql_session.commit()
