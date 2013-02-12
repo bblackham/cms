@@ -411,18 +411,16 @@ class ScoringService(Service):
 
             new_submission_ids_to_score = set([])
             new_submission_ids_to_token = set([])
-            for submission in contest.get_submissions():
-                dataset_version = submission.task.active_dataset_version
-                r = submission.results.get(dataset_version)
+            for r in contest.get_submission_results():
                 if r is not None and (r.evaluated()
                     or r.compilation_outcome == "fail") \
-                        and submission.id not in self.submission_ids_scored:
-                    new_submission_ids_to_score.add(submission.id)
-                if submission.tokened() \
-                        and submission.id not in self.submission_ids_tokened:
+                        and r.submission_id not in self.submission_ids_scored:
+                    new_submission_ids_to_score.add(r.submission_id)
+                if r.submission.tokened() \
+                        and r.submission_id not in self.submission_ids_tokened:
                     new_submission_ids_to_token.add(
-                        (submission.id,
-                         make_timestamp(submission.token.timestamp)))
+                        (r.submission_id,
+                         make_timestamp(r.submission.token.timestamp)))
 
         new_s = len(new_submission_ids_to_score)
         old_s = len(self.submission_ids_to_score)

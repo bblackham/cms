@@ -687,10 +687,8 @@ class EvaluationService(Service):
 
             # Only adding submission not compiled/evaluated that have
             # not yet reached the limit of tries.
-            for submission in contest.get_submissions():
-                submission_result = SubmissionResult.get_from_submission_id(
-                    submission.id, submission.task.active_dataset_version,
-                    session)
+            for submission_result in contest.get_submission_results():
+                submission = submission_result.submission
                 if to_compile(submission_result):
                     if self.push_in_queue(
                         JobQueueEntry(
@@ -797,23 +795,23 @@ class EvaluationService(Service):
         with SessionGen(commit=False) as session:
             contest = session.query(Contest).\
                       filter_by(id=self.contest_id).first()
-            for submission in contest.get_submissions():
-                if submission.compilation_outcome == "fail":
+            for submission_result in contest.get_submission_results():
+                if submission_result.compilation_outcome == "fail":
                     stats["compilation_fail"] += 1
-                elif submission.compilation_outcome is None:
-                    if submission.compilation_tries >= \
+                elif submission_result.compilation_outcome is None:
+                    if submission_result.compilation_tries >= \
                            EvaluationService.MAX_COMPILATION_TRIES:
                         stats["max_compilations"] += 1
                     else:
                         stats["compiling"] += 1
-                elif submission.compilation_outcome == "ok":
-                    if submission.evaluated():
-                        if submission.scored():
+                elif submission_result.compilation_outcome == "ok":
+                    if submission_result.evaluated():
+                        if submission_result.scored():
                             stats["scored"] += 1
                         else:
                             stats["evaluated"] += 1
                     else:
-                        if submission.evaluation_tries >= \
+                        if submission_result.evaluation_tries >= \
                                EvaluationService.MAX_EVALUATION_TRIES:
                             stats["max_evaluations"] += 1
                         else:

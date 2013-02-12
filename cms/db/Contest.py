@@ -165,6 +165,7 @@ class Contest(Base):
 
     # Moreover, we have the following methods.
     # get_submissions (defined in SQLAlchemyAll)
+    # get_submission_results (defined in SQLAlchemyAll)
     # get_user_tests (defined in SQLAlchemyAll)
 
     def export_to_dict(self, skip_submissions=False, skip_user_tests=False):
