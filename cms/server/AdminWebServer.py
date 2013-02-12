@@ -1423,7 +1423,8 @@ class TaskHandler(BaseHandler):
             for dataset in task.datasets.itervalues():
                 for testcase in dataset.testcases:
                     testcase.public = bool(self.get_argument(
-                        "testcase_%s_public" % testcase.num, False))
+                        "testcase_%s_%s_public" % (
+                            dataset.version, testcase.num), False))
 
         except Exception as error:
             logger.warning("Invalid field: %s" % (traceback.format_exc()))

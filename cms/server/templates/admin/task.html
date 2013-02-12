@@ -241,7 +241,7 @@ $("select[name=task_type]").change(showTaskTypeOption);
           <tr>
             <td style="font-weight:bold;">{{ testcase.num }}</td>
             <td style="font-weight:bold;">
-              <input type="checkbox" name="testcase_{{ testcase.num }}_public" {% if testcase.public %}checked{% end %} />
+              <input type="checkbox" name="testcase_{{ dataset.version }}_{{ testcase.num }}_public" {% if testcase.public %}checked{% end %} />
             </td>
             <td>
               <a href="#" onclick="utils.show_file('input{{ testcase.num }}','{{ url_root }}/file/{{ testcase.input }}/input{{ testcase.num }}')">Show input</a>
