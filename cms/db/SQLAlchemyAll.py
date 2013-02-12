@@ -66,6 +66,7 @@ def get_submission_results(self):
     """
     return self.sa_session.query(SubmissionResult).join(Task).\
            filter(Task.contest == self).\
+           filter(Task.id == SubmissionResult.task_id).\
            filter(Task.active_dataset_version == SubmissionResult.dataset_version).\
            all()
 

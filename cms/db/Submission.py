@@ -200,8 +200,7 @@ class SubmissionResult(Base):
             "results",
             collection_class=smart_mapped_collection('dataset_version'),
             cascade="all, delete-orphan",
-            passive_deletes=True),
-        single_parent=True)
+            passive_deletes=True))
 
     # Now below follow the actual result fields.
 
@@ -300,7 +299,7 @@ class SubmissionResult(Base):
         return res
 
     @classmethod
-    def import_from_dict(cls, data, tasks_by_name):
+    def import_from_dict(cls, data):
         """Build the object using data from a dictionary.
 
         """
