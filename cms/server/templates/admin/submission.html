@@ -9,36 +9,9 @@
   <h1>Submission {{ s.id }}</h1>
 </div>
 
-{% if len(datasets) == 0 %}
-    No datasets exist for this task.
-{% else %}
-  <p>Dataset: "<strong>{{ shown_dataset.description }}</strong>".<br/>
-  Click on one of the following to view the results under a
-  different dataset.</p>
-  <table>
-  {% for dataset in sorted(datasets, key=lambda d: d.version) %}
-    <tr><td>
-    {% if dataset.version == shown_dataset.version %}
-      <strong>
-    {% else %}
-      <a href="{{ url_root }}/submission/{{ s.id }}/{{ dataset.version }}">
-    {% end %}
-    {{ dataset.description }}
-    {% if dataset.version == shown_dataset.version %}
-      </strong>
-    {% else %}
-      </a>
-    {% end %}
+{% set dataset_selector_par_url = "%s/submission/%s" % (url_root, s.id) %}
+{% include dataset_selector.html %}
 
-    {% if dataset.version == active_dataset.version %}
-        (Active)
-    {% end %}
-    </td><td>
-
-    </td></tr>
-  {% end %}
-  </table>
-{% end %}
 {% set reevaluation_par_dataset_version = shown_dataset.version %}
 
 <h2 id="title_details" class="toggling_on">Submission details</h2>
