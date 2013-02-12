@@ -7,6 +7,7 @@
     No datasets exist for this task.
 {% else %}
   <p>Current dataset: "<strong>{{ shown_dataset.description }}</strong>".<br/>
+  {% if len(datasets) > 1 %}
   Click on one of the following items to view the results under a
   different dataset.</p>
   <table>
@@ -27,6 +28,7 @@
     </td></tr>
   {% end %}
   </table>
+  {% end %}
 {% end %}
 </div>
 
