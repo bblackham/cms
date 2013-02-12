@@ -1,4 +1,6 @@
-<h2 id="title_datasets" class="toggling_off">Dataset: {{ shown_dataset.description }}{% if active_dataset.version == shown_dataset.version %} (Live){% end %}</h2>
+{% from cms.server import format_dataset_attrs %}
+
+<h2 id="title_datasets" class="toggling_off">Dataset: {{ shown_dataset.description + format_dataset_attrs(shown_dataset) }}</h2>
 <div id="datasets" style="display: none;">
 
 {% if len(datasets) == 0 %}
@@ -21,10 +23,7 @@
     {% else %}
       </a>
     {% end %}
-
-    {% if dataset.version == active_dataset.version %}
-        (Live)
-    {% end %}
+    {{ format_dataset_attrs(dataset) }}
     </td></tr>
   {% end %}
   </table>

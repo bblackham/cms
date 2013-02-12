@@ -333,6 +333,10 @@ class Dataset(Base):
     description = Column(
         String)
 
+    autojudge = Column(Boolean,
+        nullable=False,
+        default=False)
+
     # Task object owning the testcase.
     task = relationship(
         Task,
@@ -347,10 +351,11 @@ class Dataset(Base):
     # SQLAlchemy.
     # testcases (list of Testcase objects)
 
-    def __init__(self, task, version=None, description=''):
+    def __init__(self, task, version=None, description='', autojudge=False):
         self.task = task
         self.version = version
         self.description = description
+        self.autojudge = autojudge
 
     def export_to_dict(self):
         """Return object data as a dictionary.
@@ -361,6 +366,7 @@ class Dataset(Base):
                 'description': self.description,
                 'testcases': [testcase.export_to_dict()
                               for testcase in self.testcases],
+                'autojudge': self.autojudge,
             }
 
 

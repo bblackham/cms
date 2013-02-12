@@ -14,6 +14,7 @@ $("select[name=task_type]").change(showTaskTypeOption);
 {% end %}
 
 {% block core %}
+{% from cms.server import format_dataset_attrs %}
 {% from cms import plugin_list %}
 {% set task_type_list = plugin_list("cms.grading.tasktypes", "tasktypes") %}
 {% set score_type_list = plugin_list("cms.grading.scoretypes", "scoretypes") %}
@@ -210,7 +211,7 @@ $("select[name=task_type]").change(showTaskTypeOption);
     {% end %}
     <a href="{{ url_root }}/add_dataset/{{ task.id }}/-">Create a new dataset</a><br/>
     {% for _, dataset in sorted(task.datasets.items()) %}
-    <h3 id="title_testcases_{{ dataset.version }}" class="toggling_on">Dataset: {{ dataset.description }}{% if task.active_dataset_version == dataset.version %} (Live){% end %}</h3>
+    <h3 id="title_testcases_{{ dataset.version }}" class="toggling_on">Dataset: {{ dataset.description }}{{ format_dataset_attrs(dataset) }}</h3>
     <div id="testcases_{{ dataset.version }}">
       {% if task.active_dataset_version == dataset.version %}
       [Make Live]
@@ -223,6 +224,9 @@ $("select[name=task_type]").change(showTaskTypeOption);
       [Delete]
       {% else %}
       <a href="{{ url_root }}/delete_dataset/{{ task.id }}/{{ dataset.version }}">[Delete]</a>
+      {% end %}
+      {% if task.active_dataset_version != dataset.version %}
+        <a href="{{ url_root }}/autojudge_dataset/{{ task.id }}/{{ dataset.version }}">[{% if dataset.autojudge %}Disable{% else %}Enable{% end %} judging]</a>
       {% end %}
       <br/>
       <a href="{{ url_root }}/add_testcase/{{ task.id }}/{{ dataset.version }}">Add a testcase</a>

@@ -386,6 +386,20 @@ def format_token_rules(tokens, t_type=None, locale=None):
     return result
 
 
+def format_dataset_attrs(dataset):
+    dataset_attrs = []
+    active = dataset.version == dataset.task.active_dataset_version
+    judging = dataset.autojudge
+    if active:
+        dataset_attrs.append("Live")
+    if judging:
+        dataset_attrs.append("Judging")
+    if dataset_attrs:
+        return " (" + ", ".join(dataset_attrs) + ")"
+    else:
+        return ""
+
+
 def filter_ascii(string):
     """Avoid problem with printing a string provided by a malicious
     entity.

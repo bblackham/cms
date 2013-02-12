@@ -1039,7 +1039,21 @@ class ActivateDatasetHandler(BaseHandler):
         dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
         task.active_dataset_version = dataset.version
         self.sql_session.commit()
+        self.application.service.scoring_service.reinitialize()
+
         self.redirect("/task/%s" % task.id)
+
+
+class ToggleAutojudgeDatasetHandler(BaseHandler):
+    """Toggle whether a given dataset is judged automatically or not.
+
+    """
+    def get(self, task_id, dataset_version):
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+        dataset.autojudge = not dataset.autojudge
+        self.sql_session.commit()
+        self.application.service.scoring_service.reinitialize()
+        self.redirect("/task/%s" % dataset.task_id)
 
 
 class AddTestcaseHandler(BaseHandler):
@@ -1891,6 +1905,7 @@ _aws_handlers = [
     (r"/rename_dataset/([0-9]+)/([0-9]+)", RenameDatasetHandler),
     (r"/delete_dataset/([0-9]+)/([0-9]+)", DeleteDatasetHandler),
     (r"/activate_dataset/([0-9]+)/([0-9]+)", ActivateDatasetHandler),
+    (r"/autojudge_dataset/([0-9]+)/([0-9]+)", ToggleAutojudgeDatasetHandler),
     (r"/add_testcase/([0-9]+)/([0-9]+)", AddTestcaseHandler),
     (r"/delete_testcase/([0-9]+)",     DeleteTestcaseHandler),
     (r"/user/([0-9]+)",   UserViewHandler),

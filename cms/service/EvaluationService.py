@@ -37,7 +37,7 @@ from cms.async import ServiceCoord, get_service_shards
 from cms.db import ask_for_contest
 from cms.db.SQLAlchemyAll import Contest, Evaluation, \
      Submission, SubmissionResult, SessionGen, UserTest, UserTestExecutable
-from cms.service import get_submissions
+from cms.service import get_submissions, get_autojudge_datasets
 from cmscommon.DateTime import make_datetime, make_timestamp
 from cms.grading.Job import Job, CompilationJob, EvaluationJob
 
@@ -688,27 +688,27 @@ class EvaluationService(Service):
             # Only adding submission not compiled/evaluated that have
             # not yet reached the limit of tries.
             for submission in contest.get_submissions():
-                submission_result = SubmissionResult.get_from_submission_id(
-                    submission.id, submission.task.active_dataset_version,
-                    session)
-                if to_compile(submission_result):
-                    if self.push_in_queue(
-                        JobQueueEntry(
-                            EvaluationService.JOB_TYPE_COMPILATION,
-                            submission.id,
-                            submission.task.active_dataset_version),
-                        EvaluationService.JOB_PRIORITY_HIGH,
-                        submission.timestamp):
-                        new_jobs += 1
-                elif to_evaluate(submission_result):
-                    if self.push_in_queue(
-                        JobQueueEntry(
-                            EvaluationService.JOB_TYPE_EVALUATION,
-                            submission.id,
-                            submission.task.active_dataset_version),
-                        EvaluationService.JOB_PRIORITY_MEDIUM,
-                        submission.timestamp):
-                        new_jobs += 1
+                for dataset_version in get_autojudge_datasets(submission.task):
+                    submission_result = SubmissionResult.get_from_submission_id(
+                        submission.id, dataset_version, session)
+                    if to_compile(submission_result):
+                        if self.push_in_queue(
+                            JobQueueEntry(
+                                EvaluationService.JOB_TYPE_COMPILATION,
+                                submission.id,
+                                dataset_version),
+                            EvaluationService.JOB_PRIORITY_HIGH,
+                            submission.timestamp):
+                            new_jobs += 1
+                    elif to_evaluate(submission_result):
+                        if self.push_in_queue(
+                            JobQueueEntry(
+                                EvaluationService.JOB_TYPE_EVALUATION,
+                                submission.id,
+                                dataset_version),
+                            EvaluationService.JOB_PRIORITY_MEDIUM,
+                            submission.timestamp):
+                            new_jobs += 1
 
             # The same for user tests
             for user_test in contest.get_user_tests():
@@ -1270,18 +1270,18 @@ class EvaluationService(Service):
                              "%d in the database." % submission_id)
                 return
 
-            submission_result = SubmissionResult.get_from_submission_id(
-                submission_id, submission.task.active_dataset_version,
-                session)
+            for dataset_version in get_autojudge_datasets(submission.task):
+                submission_result = SubmissionResult.get_from_submission_id(
+                    submission_id, dataset_version, session)
 
-            if to_compile(submission_result):
-                self.push_in_queue(
-                    JobQueueEntry(
-                        EvaluationService.JOB_TYPE_COMPILATION,
-                        submission_id,
-                        submission.task.active_dataset_version),
-                    EvaluationService.JOB_PRIORITY_HIGH,
-                    submission.timestamp)
+                if to_compile(submission_result):
+                    self.push_in_queue(
+                        JobQueueEntry(
+                            EvaluationService.JOB_TYPE_COMPILATION,
+                            submission_id,
+                            dataset_version),
+                        EvaluationService.JOB_PRIORITY_HIGH,
+                        submission.timestamp)
 
     @rpc_method
     def new_user_test(self, user_test_id):

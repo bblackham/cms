@@ -66,3 +66,23 @@ def get_submissions(contest_id,
             submission_ids = [x.id for x in contest.get_submissions()]
 
     return submission_ids
+
+
+def get_autojudge_datasets(task):
+    """Determine the datasets for which automatic judging is enabled for a
+    given task.
+
+    task (Task): the task to query.
+
+    returns (list): list of dataset versions.
+    """
+
+    # The active dataset is always automatically judged.
+    autojudge = [task.active_dataset_version]
+
+    for dataset in task.datasets.itervalues():
+        if dataset.version != task.active_dataset_version and \
+                dataset.autojudge:
+            autojudge.append(dataset.version)
+
+    return autojudge
