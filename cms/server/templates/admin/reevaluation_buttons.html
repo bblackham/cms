@@ -31,7 +31,7 @@
                  {% if reevaluation_par_dataset_version is not None %}
                   'dataset_version': {{ reevaluation_par_dataset_version }},
                  {% end %}
-                 }
+                 },
                  function(response) { utils.redirect_if_ok('{{ url }}', response); }
                  );"
         title="Score" >S</button>

@@ -325,6 +325,12 @@ class ScoringService(Service):
         # score, this is the set where you want to pur their ids. Note
         # that sets != {} if and only if there is an alive timeout for
         # the method "score_old_submission".
+        #
+        # submission_ids_to_score and submission_ids_scored contain
+        # pairs of (submission_id, dataset_version).
+        #
+        # submission_ids_to_token contains paris of
+        #   (submission_id, token timestamp).
         self.submission_ids_to_score = set([])
         self.submission_ids_to_token = set([])
         self.scoring_old_submission = False
@@ -412,10 +418,11 @@ class ScoringService(Service):
             new_submission_ids_to_score = set([])
             new_submission_ids_to_token = set([])
             for r in contest.get_submission_results():
+                x = (r.submission_id, r.dataset_version)
                 if r is not None and (r.evaluated()
                     or r.compilation_outcome == "fail") \
-                        and r.submission_id not in self.submission_ids_scored:
-                    new_submission_ids_to_score.add(r.submission_id)
+                        and x not in self.submission_ids_scored:
+                    new_submission_ids_to_score.add(x)
                 if r.submission.tokened() \
                         and r.submission_id not in self.submission_ids_tokened:
                     new_submission_ids_to_token.add(
@@ -460,10 +467,9 @@ class ScoringService(Service):
 
         for unused_i in xrange(to_score_now):
             with SessionGen(commit=False) as session:
-                submission_id = self.submission_ids_to_score.pop()
-                submission = Submission.get_from_id(submission_id, session)
-                self.new_evaluation(submission_id,
-                    submission.task.active_dataset_version)
+                submission_id, dataset_version = self.\
+                    submission_ids_to_score.pop()
+                self.new_evaluation(submission_id, dataset_version)
         if to_score - to_score_now > 0:
             return True
 
@@ -684,7 +690,7 @@ class ScoringService(Service):
                                   submission.tokened())
 
             # Mark submission as scored.
-            self.submission_ids_scored.add(submission_id)
+            self.submission_ids_scored.add((submission_id, dataset_version))
 
             # Filling submission's score info in the db.
             submission_result.score = scorer.pool[submission_id]["score"]
@@ -780,6 +786,7 @@ class ScoringService(Service):
     def invalidate_submission(self,
                               submission_id=None,
                               user_id=None,
+                              dataset_version=None,
                               task_id=None):
         """Request for invalidating the scores of some submissions.
 
@@ -791,6 +798,7 @@ class ScoringService(Service):
                              None.
         user_id (int): id of the user we want to invalidate, or None.
         task_id (int): id of the task we want to invalidate, or None.
+        dataset_version (int): dataset version of task to invalidate, or None.
 
         """
         logger.info("Invalidation request received.")
@@ -807,13 +815,19 @@ class ScoringService(Service):
         with SessionGen(commit=True) as session:
             for submission_id in submission_ids:
                 submission = Submission.get_from_id(submission_id, session)
+                if dataset_version is None:
+                    dv = submission.task.active_dataset_version
+                else:
+                    dv = dataset_version
+                submission_result = SubmissionResult.get_from_submission_id(
+                    submission_id, dv, session)
                 # If the submission is not evaluated, it does not have
                 # a score to invalidate, and, when evaluated,
                 # ScoringService will be prompted to score it. So in
                 # that case we do not have to do anything.
-                if submission.evaluated():
-                    submission.invalidate_score()
-                    new_submission_ids.append(submission_id)
+                if submission_result.evaluated():
+                    submission_result.invalidate_score()
+                    new_submission_ids.append((submission_id, dv))
 
         old_s = len(self.submission_ids_to_score)
         old_t = len(self.submission_ids_to_token)
