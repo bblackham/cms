@@ -82,6 +82,7 @@
           {% end %}
         </td>
       </tr>
+      {% if sr is not None %}
       <tr>
         <td>Compilation attempts</td>
         <td>{{ sr.compilation_tries }}</td>
@@ -98,6 +99,7 @@
         <td>Evaluation attempts</td>
         <td>{{ sr.evaluation_tries }}</td>
       </tr>
+      {% end %}
       <tr>
         <td>Reevaluate</td>
         <td>
