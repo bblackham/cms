@@ -292,8 +292,8 @@ class Contest(Base):
 
                 # Enumerate executables
                 if not light:
-                    for _, sr in submission.results:
-                        for _file in sr.executables.values():
+                    for sr in submission.results.itervalues():
+                        for _file in sr.executables.itervalues():
                             files.add(_file.digest)
 
         if not skip_user_tests:

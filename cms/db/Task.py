@@ -172,13 +172,14 @@ class Task(Base):
     active_dataset = relationship(
         'Dataset',
         primaryjoin='and_(Task.id==Dataset.task_id, Task.active_dataset_version==Dataset.version)',
+        post_update=True,
         uselist=False,
     )
 
     # Follows the description of the fields automatically added by
     # SQLAlchemy.
     # submission_format (list of SubmissionFormatElement objects)
-    # datasets (list of Dataset objects)
+    # datasets (dict of Dataset objects indexed by version)
     # attachments (dict of Attachment objects indexed by filename)
     # statements (dict of Statement objects indexed by language code)
     # submissions (list of Submission objects)
@@ -206,8 +207,9 @@ class Task(Base):
                 'submission_format':    [element.export_to_dict()
                                          for element
                                          in self.submission_format],
-                'datasets':             [dataset.export_to_dict()
-                                         for dataset in self.datasets],
+                'active_dataset': self.active_dataset_version,
+                'datasets': [dataset.export_to_dict()
+                             for _, dataset in sorted(self.datasets.items())],
                 'token_initial':        self.token_initial,
                 'token_max':            self.token_max,
                 'token_total':          self.token_total,
@@ -240,6 +242,8 @@ class Task(Base):
             sfe_data) for sfe_data in data['submission_format']]
         data['datasets'] = [Dataset.import_from_dict(dataset_data)
                             for dataset_data in data['datasets']]
+        data['datasets'] = dict([(_d.version, _d) for _d in data['datasets']])
+        data['active_dataset'] = data['datasets'][data['active_dataset']]
         data['statements'] = [Statement.import_from_dict(statement_data)
                               for statement_data in data['statements']]
         data['statements'] = dict([(statement.language, statement)
@@ -335,12 +339,13 @@ class Dataset(Base):
 
     # Follows the description of the fields automatically added by
     # SQLAlchemy.
-    # testcases (list of Testcase objects)
     # managers (dict of Manager objects indexed by filename)
+    # testcases (list of Testcase objects)
 
-    def __init__(self, task,
-        time_limit, memory_limit, task_type, task_type_parameters,
-        score_type, score_type_parameters, managers,
+    def __init__(self, task=None,
+        time_limit=None, memory_limit=None,
+        task_type=None, task_type_parameters=None,
+        score_type=None, score_type_parameters=None, managers={}, testcases=[],
         version=None, description='', autojudge=False):
 
         for filename, manager in managers.iteritems():
@@ -354,6 +359,7 @@ class Dataset(Base):
         self.score_type = score_type
         self.score_type_parameters = score_type_parameters
         self.managers = managers
+        self.testcases = testcases
         self.version = version
         self.description = description
         self.autojudge = autojudge
@@ -362,8 +368,7 @@ class Dataset(Base):
         """Return object data as a dictionary.
 
         """
-        return {'task_id':  self.task_id,
-                'version': self.version,
+        return {'version': self.version,
                 'description': self.description,
                 'testcases': [testcase.export_to_dict()
                               for testcase in self.testcases],
@@ -374,9 +379,8 @@ class Dataset(Base):
                 'task_type_parameters': self.task_type_parameters,
                 'score_type':           self.score_type,
                 'score_type_parameters': self.score_type_parameters,
-                'managers':             [manager.export_to_dict()
-                                         for manager
-                                         in self.managers.itervalues()],
+                'managers': [manager.export_to_dict()
+                             for manager in self.managers.itervalues()],
             }
 
     @classmethod

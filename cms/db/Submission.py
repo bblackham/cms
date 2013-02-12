@@ -111,7 +111,8 @@ class Submission(Base):
                       for _file in self.files.itervalues()],
             'language': self.language,
             'token': self.token,
-            'results': self.results,
+            'results': [_sr.export_to_dict()
+                        for _, _sr in sorted(self.results.items())],
             }
         if self.token is not None:
             res['token'] = self.token.export_to_dict()
@@ -131,9 +132,10 @@ class Submission(Base):
         data['task'] = tasks_by_name[data['task']]
         data['user'] = None
         data['timestamp'] = make_datetime(data['timestamp'])
-        data['results'] = dict([
-            (_res.dataset_version, SubmissionResult.import_from_dict(_res))
-            for _res in data['results']])
+        data['results'] = [SubmissionResult.import_from_dict(_r, data['task'])
+                           for _r in data['results']]
+        data['results'] = dict([(_r.dataset_version, _r)
+                                for _r in data['results']])
         return cls(**data)
 
     def tokened(self):
@@ -283,26 +285,33 @@ class SubmissionResult(Base):
 
         """
         res = {
+            'dataset_version': self.dataset.version,
             'compilation_outcome': self.compilation_outcome,
             'compilation_tries': self.compilation_tries,
             'compilation_text': self.compilation_text,
             'compilation_shard': self.compilation_shard,
             'compilation_sandbox': self.compilation_sandbox,
+            'evaluation_outcome': self.evaluation_outcome,
+            'evaluation_tries': self.evaluation_tries,
+            'score': self.score,
+            'score_details': self.score_details,
+            'public_score': self.public_score,
+            'public_score_details': self.public_score_details,
+            'ranking_score_details': self.ranking_score_details,
+            'evaluations': [evaluation.export_to_dict()
+                            for evaluation in self.evaluations],
             'executables': [executable.export_to_dict()
                             for executable
                             in self.executables.itervalues()],
-            'evaluation_outcome': self.evaluation_outcome,
-            'evaluations': [evaluation.export_to_dict()
-                            for evaluation in self.evaluations],
-            'evaluation_tries': self.evaluation_tries,
             }
         return res
 
     @classmethod
-    def import_from_dict(cls, data):
+    def import_from_dict(cls, data, task):
         """Build the object using data from a dictionary.
 
         """
+        data['task'] = task
         data['executables'] = [Executable.import_from_dict(executable_data)
                                for executable_data in data['executables']]
         data['executables'] = dict([(executable.filename, executable)

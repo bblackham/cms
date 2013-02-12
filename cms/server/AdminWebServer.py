@@ -868,7 +868,7 @@ def copy_dataset(new_dataset, old_dataset, clone_results, clone_managers, sql_se
             # Create the submission result.
             new_sr = SubmissionResult(
                 submission=sr.submission,
-                task_id=sr.task_id,
+                task=sr.task,
                 dataset=new_dataset,
                 compilation_outcome=sr.compilation_outcome,
                 compilation_text=sr.compilation_text,
