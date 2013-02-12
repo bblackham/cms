@@ -412,9 +412,9 @@ class WorkerPool:
         dataset_version = job.dataset_version
         timestamp = side_data[1]
         queue_time = self._start_time[shard] - timestamp
-        logger.info("Asking worker %s to %s submission/user test %d "
+        logger.info("Asking worker %s to %s submission/user test %d(%d) "
                     " (%s after submission)." %
-                    (shard, action, object_id, queue_time))
+                    (shard, action, object_id, dataset_version, queue_time))
 
         with SessionGen(commit=False) as session:
             if action == EvaluationService.JOB_TYPE_COMPILATION:
@@ -687,8 +687,10 @@ class EvaluationService(Service):
 
             # Only adding submission not compiled/evaluated that have
             # not yet reached the limit of tries.
-            for submission_result in contest.get_submission_results():
-                submission = submission_result.submission
+            for submission in contest.get_submissions():
+                submission_result = SubmissionResult.get_from_submission_id(
+                    submission.id, submission.task.active_dataset_version,
+                    session)
                 if to_compile(submission_result):
                     if self.push_in_queue(
                         JobQueueEntry(
