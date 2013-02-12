@@ -1367,6 +1367,31 @@ class TaskStatementViewHandler(FileHandler):
         self.fetch(statement, "application/pdf", "%s.pdf" % task_name)
 
 
+class TaskSubmissionsHandler(BaseHandler):
+    """Shows all submissions for this task, allowing the admin to
+    view the results under different datasets.
+
+    """
+    def get(self, task_id, dataset_version):
+        task = self.safe_get_item(Task, task_id)
+        self.contest = task.contest
+        dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
+
+        self.r_params = self.render_params()
+        self.r_params["task"] = task
+        self.r_params["active_dataset"] = task.active_dataset
+        self.r_params["shown_dataset"] = dataset
+        self.r_params["datasets"] = \
+            self.sql_session.query(Dataset)\
+                .filter(Dataset.task_id == task_id)\
+                .order_by(Dataset.version).all()
+        self.r_params["submissions"] = \
+            self.sql_session.query(Submission)\
+                .join(Task).filter(Task.id == task_id)\
+                .order_by(Submission.timestamp.desc()).all()
+        self.render("submissionlist.html", **self.r_params)
+
+
 class RankingHandler(BaseHandler):
     """Shows the ranking for a contest.
 
@@ -1586,11 +1611,23 @@ class SubmissionViewHandler(BaseHandler):
     compile please check'.
 
     """
-    def get(self, submission_id):
+    def get(self, submission_id, dataset_version=None):
         submission = self.safe_get_item(Submission, submission_id)
+        task = submission.task
+        if dataset_version is not None:
+            dataset = self.safe_get_item(Dataset, (task.id, dataset_version))
+        else:
+            dataset = task.active_dataset
+
         self.contest = submission.user.contest
         self.r_params = self.render_params()
         self.r_params["s"] = submission
+        self.r_params["active_dataset"] = task.active_dataset
+        self.r_params["shown_dataset"] = dataset
+        self.r_params["datasets"] = \
+            self.sql_session.query(Dataset)\
+                .filter(Dataset.task_id == task.id)\
+                .order_by(Dataset.version).all()
         self.render("submission.html", **self.r_params)
 
 
@@ -1756,6 +1793,7 @@ _aws_handlers = [
     (r"/ranking/([0-9]+)/([a-z]+)", RankingHandler),
     (r"/task/([0-9]+)",           TaskHandler),
     (r"/task/([0-9]+)/statement", TaskStatementViewHandler),
+    (r"/task/([0-9]+)/([0-9]+)", TaskSubmissionsHandler),
     (r"/add_task/([0-9]+)",            AddTaskHandler),
     (r"/add_statement/([0-9]+)",       AddStatementHandler),
     (r"/delete_statement/([0-9]+)",    DeleteStatementHandler),
@@ -1774,6 +1812,7 @@ _aws_handlers = [
     (r"/add_announcement/([0-9]+)",    AddAnnouncementHandler),
     (r"/remove_announcement/([0-9]+)", RemoveAnnouncementHandler),
     (r"/submission/([0-9]+)",                SubmissionViewHandler),
+    (r"/submission/([0-9]+)/([0-9]+)",       SubmissionViewHandler),
     (r"/submission_file/([0-9]+)",  SubmissionFileHandler),
     (r"/file/([a-f0-9]+)/([a-zA-Z0-9_.-]+)", FileFromDigestHandler),
     (r"/message/([0-9]+)",         MessageHandler),

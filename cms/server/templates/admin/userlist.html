@@ -15,6 +15,7 @@
     </tr>
   </thead>
   <tbody>
+    {% set reevaluation_par_dataset_version = None %}
     {% set reevaluation_par_name = "user" %}
     {% for u in sorted(contest.users, cmp = lambda x, y: cmp(x.username, y.username)) %}
     <tr>

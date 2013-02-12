@@ -1343,8 +1343,9 @@ class EvaluationService(Service):
         submission_ids = get_submissions(
             self.contest_id,
             submission_id, user_id, task_id)
-        logger.info("Submissions to invalidate for %s: %s." %
-                    (level, len(submission_ids)))
+        logger.info(
+            "Submissions to invalidate for %s (dataset_version: %r): %s." %
+                    (level, dataset_version, len(submission_ids)))
         if len(submission_ids) == 0:
             return
 
