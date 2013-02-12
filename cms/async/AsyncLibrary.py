@@ -415,7 +415,12 @@ class Service:
         if "__data" not in message:
             raise ValueError("No data present.")
 
-        result = method(**message["__data"])
+        try:
+            result = method(**message["__data"])
+        except:
+            logger.info("Method %s called over RPC threw exception:\n%s" % (
+                method_name, traceback.format_exc()))
+            raise
 
         return result
 
