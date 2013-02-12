@@ -387,6 +387,13 @@ def format_token_rules(tokens, t_type=None, locale=None):
 
 
 def format_dataset_attrs(dataset):
+    """Construct a printable string containing the attributes of a given
+    dataset (e.g. live, autojudge enabled, etc.)
+
+    dataset (Dataset): the dataset in question
+    return (str): printable string of relevant attributes
+
+    """
     dataset_attrs = []
     active = dataset.version == dataset.task.active_dataset_version
     judging = dataset.autojudge
