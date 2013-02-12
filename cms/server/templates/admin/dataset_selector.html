@@ -1,4 +1,4 @@
-<h2 id="title_datasets" class="toggling_off">Dataset: {{ shown_dataset.description }}{% if active_dataset.version == shown_dataset.version %} (Active){% end %}</h2>
+<h2 id="title_datasets" class="toggling_off">Dataset: {{ shown_dataset.description }}{% if active_dataset.version == shown_dataset.version %} (Live){% end %}</h2>
 <div id="datasets" style="display: none;">
 
 {% if len(datasets) == 0 %}
@@ -23,7 +23,7 @@
     {% end %}
 
     {% if dataset.version == active_dataset.version %}
-        (Active)
+        (Live)
     {% end %}
     </td></tr>
   {% end %}

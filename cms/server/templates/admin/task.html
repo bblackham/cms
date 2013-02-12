@@ -210,12 +210,12 @@ $("select[name=task_type]").change(showTaskTypeOption);
     {% end %}
     <a href="{{ url_root }}/add_dataset/{{ task.id }}/-">Create a new dataset</a><br/>
     {% for _, dataset in sorted(task.datasets.items()) %}
-    <h3 id="title_testcases_{{ dataset.version }}" class="toggling_on">Dataset: {{ dataset.description }}{% if task.active_dataset_version == dataset.version %} (Active){% end %}</h3>
+    <h3 id="title_testcases_{{ dataset.version }}" class="toggling_on">Dataset: {{ dataset.description }}{% if task.active_dataset_version == dataset.version %} (Live){% end %}</h3>
     <div id="testcases_{{ dataset.version }}">
       {% if task.active_dataset_version == dataset.version %}
-      [Activate]
+      [Make Live]
       {% else %}
-      <a href="{{ url_root }}/activate_dataset/{{ task.id }}/{{ dataset.version }}">[Activate]</a>
+      <a href="{{ url_root }}/activate_dataset/{{ task.id }}/{{ dataset.version }}">[Make Live]</a>
       {% end %}
       <a href="{{ url_root }}/add_dataset/{{ task.id }}/{{ dataset.version }}">[Clone]</a>
       <a href="{{ url_root }}/rename_dataset/{{ task.id }}/{{ dataset.version }}">[Rename]</a>
