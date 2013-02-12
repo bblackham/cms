@@ -44,7 +44,7 @@ from cms.db import ask_for_contest
 from cms.db.SQLAlchemyAll import SessionGen, Submission, SubmissionResult, \
     Contest
 from cms.grading.scoretypes import get_score_type
-from cms.service import get_submissions
+from cms.service import get_submissions, get_autojudge_datasets
 from cmscommon.DateTime import make_timestamp
 
 
@@ -415,22 +415,25 @@ class ScoringService(Service):
             return True
 
         with SessionGen(commit=False) as session:
-            contest = session.query(Contest).\
-                      filter_by(id=self.contest_id).first()
-
             new_submission_ids_to_score = set([])
             new_submission_ids_to_token = set([])
-            for r in contest.get_submission_results():
-                x = (r.submission_id, r.dataset_version)
-                if r is not None and (r.evaluated()
-                    or r.compilation_outcome == "fail") \
-                        and x not in self.submission_ids_scored:
-                    new_submission_ids_to_score.add(x)
-                if r.submission.tokened() \
-                        and r.submission_id not in self.submission_ids_tokened:
-                    new_submission_ids_to_token.add(
-                        (r.submission_id,
-                         make_timestamp(r.submission.token.timestamp)))
+            contest = session.query(Contest).\
+                      filter_by(id=self.contest_id).first()
+            for submission in contest.get_submissions():
+                for dataset_version in get_autojudge_datasets(submission.task):
+                    r = SubmissionResult.get_from_submission_id(
+                            submission.id, dataset_version, session)
+
+                    x = (r.submission_id, r.dataset_version)
+                    if r is not None and (r.evaluated()
+                        or r.compilation_outcome == "fail") \
+                            and x not in self.submission_ids_scored:
+                        new_submission_ids_to_score.add(x)
+                    if r.submission.tokened() and r.submission_id not in \
+                            self.submission_ids_tokened:
+                        new_submission_ids_to_token.add(
+                            (r.submission_id,
+                             make_timestamp(r.submission.token.timestamp)))
 
         new_s = len(new_submission_ids_to_score)
         old_s = len(self.submission_ids_to_score)
