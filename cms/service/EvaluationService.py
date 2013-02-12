@@ -412,7 +412,7 @@ class WorkerPool:
         dataset_version = job.dataset_version
         timestamp = side_data[1]
         queue_time = self._start_time[shard] - timestamp
-        logger.info("Asking worker %s to %s submission/user test %d(%d) "
+        logger.info("Asking worker %s to %s submission/user test %d(%r) "
                     " (%s after submission)." %
                     (shard, action, object_id, dataset_version, queue_time))
 
@@ -987,7 +987,7 @@ class EvaluationService(Service):
                     object_id, dataset_version, session)
                 if submission_result is None:
                     logger.error("[action_finished] Couldn't find "
-                                 "submission %d(%d) in the database." %
+                                 "submission %d(%r) in the database." %
                                  (object_id, dataset_version))
                     return
 
@@ -1012,7 +1012,7 @@ class EvaluationService(Service):
                     object_id, dataset_version, session)
                 if submission_result is None:
                     logger.error("[action_finished] Couldn't find "
-                                 "submission %d(%d) in the database." %
+                                 "submission %d(%r) in the database." %
                                  (object_id, dataset_version))
                     return
 
