@@ -136,7 +136,7 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
       <a href="{{ url_root }}/delete_dataset/{{ task.id }}/{{ dataset.version }}">[Delete]</a>
       {% end %}
       {% if task.active_dataset_version != dataset.version %}
-        <a href="{{ url_root }}/autojudge_dataset/{{ task.id }}/{{ dataset.version }}">[{% if dataset.autojudge %}Disable{% else %}Enable{% end %} judging]</a>
+        <a href="{{ url_root }}/autojudge_dataset/{{ task.id }}/{{ dataset.version }}">[{% if dataset.autojudge %}Disable{% else %}Enable{% end %} background judging]</a>
       {% end %}
       <a href="{{ url_root }}/task/{{ task.id }}/{{ dataset.version }}">[View results]</a>
     </p>
