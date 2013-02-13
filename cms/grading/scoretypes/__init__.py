@@ -63,4 +63,11 @@ def get_score_type(submission=None, task=None, dataset_version=None):
     cls = plugin_lookup(score_type_name,
                         "cms.grading.scoretypes", "scoretypes")
 
-    return cls(score_type_parameters, public_testcases)
+    try:
+        return cls(score_type_parameters, public_testcases)
+    except Exception as error:
+        logger.error("Cannot instantiate score type for task "
+            "%d \"%s\", dataset %d \"%s\"\n%r." % (
+                task.id, task.name, dataset.version, dataset.description,
+                error))
+        return None
