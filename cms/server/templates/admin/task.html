@@ -142,7 +142,7 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
 
   <!-- Task type and score type settings -->
 
-    <h4 id="title_task_type" class="toggling_on">Task and scoring parameters</h4>
+    <h4 id="title_task_type_{{ dataset.version }}" class="toggling_on">Task and scoring parameters</h4>
 
     {% if dataset.task_type not in [task_type.__name__ for task_type in task_type_list] %}
     <script type="text/javascript">
@@ -170,7 +170,7 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
     </script>
     {% end %}
 
-    <div id="task_type" class="task_dataset_params">
+    <div id="task_type_{{ dataset.version }}" class="task_dataset_params">
       <table>
 
         <tr>
