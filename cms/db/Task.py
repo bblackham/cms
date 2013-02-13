@@ -243,7 +243,8 @@ class Task(Base):
         data['datasets'] = [Dataset.import_from_dict(dataset_data)
                             for dataset_data in data['datasets']]
         data['datasets'] = dict([(_d.version, _d) for _d in data['datasets']])
-        data['active_dataset'] = data['datasets'][data['active_dataset']]
+        if data['active_dataset'] is not None:
+            data['active_dataset'] = data['datasets'][data['active_dataset']]
         data['statements'] = [Statement.import_from_dict(statement_data)
                               for statement_data in data['statements']]
         data['statements'] = dict([(statement.language, statement)
@@ -392,6 +393,8 @@ class Dataset(Base):
                             for manager_data in data['managers']]
         data['managers'] = dict([(manager.filename, manager)
                                  for manager in data['managers']])
+        data['testcases'] = [Testcase.import_from_dict(testcase)
+                             for testcase in data['testcases']]
         return cls(**data)
 
 
@@ -462,7 +465,8 @@ class Testcase(Base):
         """
         return {'input':  self.input,
                 'output': self.output,
-                'public': self.public}
+                'public': self.public,
+                'num': self.num}
 
     @classmethod
     def import_from_dict(cls, data):
