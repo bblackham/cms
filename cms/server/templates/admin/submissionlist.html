@@ -37,7 +37,7 @@
       {% for s in sorted(submissions, key=lambda s: s.timestamp, reverse=True) %}
         {% if current_score_type is None %}
           {% try %}
-            {% set current_score_type = get_score_type(submission=s) %}
+            {% set current_score_type = get_score_type(submission=s, dataset_version=shown_dataset.version) %}
           {% except %}
           {% end %}
         {% end %}
