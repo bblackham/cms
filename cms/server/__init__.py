@@ -399,8 +399,8 @@ def format_dataset_attrs(dataset):
     judging = dataset.autojudge
     if active:
         dataset_attrs.append("Live")
-    if judging:
-        dataset_attrs.append("Judging")
+    elif judging:
+        dataset_attrs.append("Background judging")
     if dataset_attrs:
         return " (" + ", ".join(dataset_attrs) + ")"
     else:
