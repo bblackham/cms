@@ -29,6 +29,11 @@ setDefaultNotifyCheckboxes();
   <h1>Preview dataset change for {{ task.title }} (<a href="{{ url_root }}/task/{{ task.id }}">{{ task.name }}</a>)</h1>
 </div>
 
+<table style="width: auto;">
+<tr><td>Current dataset:</td><td><strong>{{ task.active_dataset.description }}</strong></td></tr>
+<tr><td>New dataset:</td><td><strong>{{ dataset.description }}</strong></td></tr>
+</table>
+
 <p>
 <b>NOTE</b>: The preview on this page uses the existing scoring information
 for both datasets. If you have made modifications to a dataset, you need to
@@ -39,7 +44,7 @@ below, and wait for it to complete.
 
 <p>
 {% set reevaluation_par_dataset_version = dataset.version %}
-    Reevaluate all submissions for this task:
+    Reevaluate all submissions using the dataset "{{ dataset.description }}":
     {% set reevaluation_par_name = "task" %}
     {% set reevaluation_par_value = task.id %}
     {% include reevaluation_buttons.html %}
@@ -77,13 +82,13 @@ scores.</p>
       <td><a href="/submission/{{ c.submission.id }}">{{ c.submission.id }}</a>{{ " (Tokened)" if c.submission.tokened() else "" }}</td>
       <td>
         {% if c.old_score is not None or c.new_score is not None %}
-        Score: {{ c.old_score }} -&gt; {{ c.new_score }}<br>
+        Score: {{ c.old_score }} -&gt; {{ c.new_score }}<br/>
         {% end %}
         {% if c.old_public_score is not None or c.new_public_score is not None %}
-        Public score: {{ c.old_public_score }} -&gt; {{ c.new_public_score }}<br>
+        Public score: {{ c.old_public_score }} -&gt; {{ c.new_public_score }}<br/>
         {% end %}
         {% if c.old_ranking_score_details is not None or c.new_ranking_score_details is not None %}
-        Ranking score: {{ c.old_ranking_score_details }} -&gt; {{ c.new_ranking_score_details }}<br>
+        Ranking score: {{ c.old_ranking_score_details }} -&gt; {{ c.new_ranking_score_details }}<br/>
         {% end %}
       </td>
     </tr>
