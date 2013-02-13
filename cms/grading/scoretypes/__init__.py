@@ -50,8 +50,12 @@ def get_score_type(submission=None, task=None, dataset_version=None):
     try:
         score_type_parameters = json.loads(dataset.score_type_parameters)
     except json.decoder.JSONDecodeError as error:
-        logger.error("Cannot decode score type parameters.\n%r." % error)
-        raise
+        logger.error("Cannot decode score type parameters for task "
+            "%d \"%s\", dataset %d \"%s\"\n%r." % (
+                task.id, task.name, dataset.version, dataset.description,
+                error))
+        return None
+
     public_testcases = dict(
         (testcase.num, testcase.public)
         for testcase in task.datasets[dataset_version].testcases)

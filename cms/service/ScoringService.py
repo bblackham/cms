@@ -684,6 +684,12 @@ class ScoringService(Service):
 
             # Assign score to the submission.
             scorer = self.scorers[(submission.task_id, dataset_version)]
+            if scorer is None:
+                logger.error(
+                    "Not scoring submission %d because scorer is broken." %
+                        submission_id)
+                return
+
             scorer.add_submission(submission_id, dataset_version,
                                   submission.timestamp,
                                   submission.user.username,
