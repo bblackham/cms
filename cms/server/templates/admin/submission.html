@@ -5,7 +5,7 @@
 {% set st = get_score_type(submission=s, dataset_version=shown_dataset.version) %}
 {% set sr = s.results.get(shown_dataset.version) %}
 <div class="core_title">
-  <h1>Submission {{ s.id }}</h1>
+  <h1>Submission {{ s.id }} (Task: <a href="{{ url_root }}/task/{{ s.task.id }}">{{ s.task.name }}</a>)</h1>
 </div>
 
 {% set dataset_selector_par_url = "%s/submission/%s" % (url_root, s.id) %}
