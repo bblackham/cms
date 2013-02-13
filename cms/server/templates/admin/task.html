@@ -238,7 +238,7 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
         </tr>
         <tr>
           <td>Score Parameters</td>
-          <td><input type="text" name="score_type_parameters_{{ dataset.version }}" value="{{ dataset.score_type_parameters }}"/></td>
+          <td><textarea name="score_type_parameters_{{ dataset.version }}">{{ dataset.score_type_parameters }}</textarea></td>
         </tr>
       </table>
       <div class="hr"></div>
