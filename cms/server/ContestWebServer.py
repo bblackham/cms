@@ -1083,9 +1083,15 @@ class SubmitHandler(BaseHandler):
                                 user=self.current_user,
                                 task=task)
 
+        # Create a submission result for the active dataset while we're here,
+        # in order to avoid racing with ES to create it later.
+        submission_result = SubmissionResult(
+            submission, task, task.active_dataset_version)
+
         for filename, digest in file_digests.items():
             self.sql_session.add(File(filename, digest, submission=submission))
         self.sql_session.add(submission)
+        self.sql_session.add(submission_result)
         self.sql_session.commit()
         self.application.service.evaluation_service.new_submission(
             submission_id=submission.id)
