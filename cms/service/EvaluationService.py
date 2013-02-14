@@ -1390,7 +1390,7 @@ class EvaluationService(Service):
                 else:
                     dv = dataset_version
 
-                sr = SubmissionResult.get_from_submission_id(
+                submission_result = SubmissionResult.get_from_submission_id(
                     submission_id, dv, session, create=True)
 
                 if level == "compilation":
