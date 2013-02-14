@@ -1140,9 +1140,13 @@ class ActivateDatasetHandler(BaseHandler):
         dataset = self.safe_get_item(Dataset, (task_id, dataset_version))
         task.active_dataset = dataset
         self.sql_session.commit()
-        self.application.service.scoring_service.reinitialize()
 
-        # Now send notifications.
+        # Update scoring service.
+        self.application.service.scoring_service.reinitialize()
+        self.application.service.scoring_service.dataset_updated(
+                task_id=task.id)
+
+        # Now send notifications to contestants.
         datetime = make_datetime()
 
         r = re.compile('notify_([0-9]+)$')
