@@ -1083,15 +1083,9 @@ class SubmitHandler(BaseHandler):
                                 user=self.current_user,
                                 task=task)
 
-        # Create a submission result for the active dataset while we're here,
-        # in order to avoid racing with ES to create it later.
-        submission_result = SubmissionResult(
-            submission, task, task.active_dataset_version)
-
         for filename, digest in file_digests.items():
             self.sql_session.add(File(filename, digest, submission=submission))
         self.sql_session.add(submission)
-        self.sql_session.add(submission_result)
         self.sql_session.commit()
         self.application.service.evaluation_service.new_submission(
             submission_id=submission.id)
@@ -1208,8 +1202,9 @@ class SubmissionStatusHandler(BaseHandler):
         if submission is None:
             raise tornado.web.HTTPError(404)
 
-        submission_results = SubmissionResult.get_from_submission_id(
-            submission.id, submission.task.active_dataset_version,
+        sr = SubmissionResult.get_from_id(
+            (submission.id, submission.task_id,
+                submission.task.active_dataset_version),
             self.sql_session)
 
         score_type = get_score_type(submission=submission,
@@ -1217,17 +1212,17 @@ class SubmissionStatusHandler(BaseHandler):
 
         # TODO: use some kind of constants to refer to the status.
         data = dict()
-        if not submission_results.compiled():
+        if sr is None or not sr.compiled():
             data["status"] = 1
             data["status_text"] = self._("Compiling...")
-        elif submission_results.compilation_outcome == "fail":
+        elif sr.compilation_outcome == "fail":
             data["status"] = 2
             data["status_text"] = "%s <a class=\"details\">%s</a>" % (
                 self._("Compilation failed"), self._("details"))
-        elif not submission_results.evaluated():
+        elif not sr.evaluated():
             data["status"] = 3
             data["status_text"] = self._("Evaluating...")
-        elif not submission_results.scored():
+        elif not sr.scored():
             data["status"] = 4
             data["status_text"] = self._("Scoring...")
         else:
@@ -1239,13 +1234,13 @@ class SubmissionStatusHandler(BaseHandler):
                 data["max_public_score"] = "%g" % \
                     round(score_type.max_public_score, task.score_precision)
             data["public_score"] = "%g" % \
-                round(submission_results.public_score, task.score_precision)
+                round(sr.public_score, task.score_precision)
             if submission.token is not None:
                 if score_type is not None and score_type.max_score != 0:
                     data["max_score"] = "%g" % \
                         round(score_type.max_score, task.score_precision)
                 data["score"] = "%g" % \
-                    round(submission_results.score, task.score_precision)
+                    round(sr.score, task.score_precision)
 
         self.write(data)
 
@@ -1270,26 +1265,28 @@ class SubmissionDetailsHandler(BaseHandler):
         if submission is None:
             raise tornado.web.HTTPError(404)
 
-        submission_results = SubmissionResult.get_from_submission_id(
-            submission.id, submission.task.active_dataset_version,
+        sr = SubmissionResult.get_from_id(
+            (submission.id, submission.task_id,
+                submission.task.active_dataset_version),
             self.sql_session)
 
         score_type = get_score_type(submission=submission,
             dataset_version=submission.task.active_dataset_version)
 
         details = None
-        if submission.tokened():
-            details = submission_results.score_details
-        else:
-            details = submission_results.public_score_details
+        if sr is not None:
+            if submission.tokened():
+                details = sr.score_details
+            else:
+                details = sr.public_score_details
 
-        if score_type is not None and submission_results.scored():
-            details = score_type.get_html_details(details, self._)
-        else:
-            details = None
+            if score_type is not None and sr.scored():
+                details = score_type.get_html_details(details, self._)
+            else:
+                details = None
 
         self.render("submission_details.html",
-                    sr=submission_results,
+                    sr=sr,
                     details=details)
 
 

@@ -632,10 +632,11 @@ def task_score(user, task):
         """Return if submission could be scored but it currently is
         not.
 
-        submission_result (SubmissionResult): the result to check.
+        submission_result (SubmissionResult): the result to check. May be None.
 
         """
-        return submission_result.compilation_outcome != "fail" and \
+        return submission_result is None or \
+               submission_result.compilation_outcome != "fail" and \
                not submission_result.scored()
 
     # The score of the last submission (if valid, otherwise 0.0).
@@ -660,22 +661,22 @@ def task_score(user, task):
         # otherwise we use 0.0 (and mark that the score is partial
         # when the last submission could be scored).
         s = submissions[-1]
-        last_submission_result = SubmissionResult.get_from_submission_id(
-            s.id, s.task.active_dataset_version, session)
+        last_sr = SubmissionResult.get_from_id(
+            (s.id, s.task_id, s.task.active_dataset_version), session)
 
-        if last_submission_result.scored():
-            last_score = last_submission_result.score
-        elif waits_for_score(last_submission_result):
+        if last_sr is not None and last_sr.scored():
+            last_score = last_sr.score
+        elif waits_for_score(last_sr):
             partial = True
 
         for submission in submissions:
-            sr = SubmissionResult.get_from_submission_id(
-                submission.id, submission.task.active_dataset_version,
+            sr = SubmissionResult.get_from_id(
+                (submission.id, submission.task,
+                    submission.task.active_dataset_version),
                 session)
-            if submission.token is not None:
-                if sr.scored():
-                    max_tokened_score = max(max_tokened_score,
-                                            sr.score)
+            if submission.tokened():
+                if sr is not None and sr.scored():
+                    max_tokened_score = max(max_tokened_score, sr.score)
                 elif waits_for_score(sr):
                     partial = True
 

@@ -422,8 +422,8 @@ class ScoringService(Service):
                       filter_by(id=self.contest_id).first()
             for submission in contest.get_submissions():
                 for dataset_version in get_autojudge_datasets(submission.task):
-                    # We can quite happily handle a submission result that does
-                    # not yet exist.
+                    # If a submission result does not yet exist, then we don't
+                    # need to score it.
                     r = SubmissionResult.get_from_id(
                         (submission.id, submission.task_id, dataset_version),
                         session)
@@ -859,14 +859,14 @@ class ScoringService(Service):
                     dv = submission.task.active_dataset_version
                 else:
                     dv = dataset_version
-                submission_result = SubmissionResult.get_from_submission_id(
+                sr = SubmissionResult.get_from_submission_id(
                     submission_id, dv, session)
                 # If the submission is not evaluated, it does not have
                 # a score to invalidate, and, when evaluated,
                 # ScoringService will be prompted to score it. So in
                 # that case we do not have to do anything.
-                if submission_result.evaluated():
-                    submission_result.invalidate_score()
+                if sr is not None and sr.evaluated():
+                    sr.invalidate_score()
                     new_submission_ids.append((submission_id, dv))
 
         old_s = len(self.submission_ids_to_score)
@@ -897,16 +897,23 @@ class ScoringService(Service):
         subchanges = []
         with SessionGen(commit=False) as session:
             for submission_id in submission_ids:
+                submission = Submission.get_from_id(submission_id, session)
                 submission_result = SubmissionResult.get_from_submission_id(
                     submission_id, dv, session)
-                submission = submission_result.submission
 
-                try:
-                    ranking_score_details = json.loads(
-                            submission_result.ranking_score_details)
-                except (json.decoder.JSONDecodeError, TypeError):
-                    # It may be blank.
+                if submission_result is None:
+                    # Not yet compiled, evaluated or scored.
+                    score = None
                     ranking_score_details = None
+                else:
+                    score = submission_result.score
+                    try:
+                        ranking_score_details = json.loads(
+                                submission_result.ranking_score_details)
+                    except (json.decoder.JSONDecodeError, TypeError):
+                        # It may be blank.
+                        ranking_score_details = None
+
 
                 # Data to send to remote rankings.
                 subchange_id = "%s%ss" % \
@@ -914,9 +921,10 @@ class ScoringService(Service):
                      submission_id)
                 subchange_put_data = {
                     "submission": encode_id(submission_id),
-                    "time": int(make_timestamp(submission.timestamp)),
+                    "time": int(make_timestamp(submission.timestamp))}
                     # We're sending the unrounded score to RWS
-                    "score": submission_result.score}
+                if score is not None:
+                    subchange_put_data["score"] = score
                 if ranking_score_details is not None:
                     subchange_put_data["extra"] = ranking_score_details
                 subchanges.append((subchange_id, subchange_put_data))

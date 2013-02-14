@@ -682,7 +682,7 @@ class EvaluationService(Service):
 
         """
         new_jobs = 0
-        with SessionGen(commit=False) as session:
+        with SessionGen(commit=True) as session:
             contest = session.query(Contest).\
                       filter_by(id=self.contest_id).first()
 
@@ -691,7 +691,7 @@ class EvaluationService(Service):
             for submission in contest.get_submissions():
                 for dataset_version in get_autojudge_datasets(submission.task):
                     submission_result = SubmissionResult.get_from_submission_id(
-                        submission.id, dataset_version, session)
+                        submission.id, dataset_version, session, create=True)
                     if to_compile(submission_result):
                         if self.push_in_queue(
                             JobQueueEntry(
@@ -985,7 +985,7 @@ class EvaluationService(Service):
         with SessionGen(commit=False) as session:
             if job_type == EvaluationService.JOB_TYPE_COMPILATION:
                 submission_result = SubmissionResult.get_from_submission_id(
-                    object_id, dataset_version, session)
+                    object_id, dataset_version, session, create=True)
                 if submission_result is None:
                     logger.error("[action_finished] Couldn't find "
                                  "submission %d(%r) in the database." %
@@ -1010,7 +1010,7 @@ class EvaluationService(Service):
 
             elif job_type == EvaluationService.JOB_TYPE_EVALUATION:
                 submission_result = SubmissionResult.get_from_submission_id(
-                    object_id, dataset_version, session)
+                    object_id, dataset_version, session, create=False)
                 if submission_result is None:
                     logger.error("[action_finished] Couldn't find "
                                  "submission %d(%r) in the database." %
@@ -1264,7 +1264,7 @@ class EvaluationService(Service):
         returns (bool): True if everything went well.
 
         """
-        with SessionGen(commit=False) as session:
+        with SessionGen(commit=True) as session:
             submission = Submission.get_from_id(submission_id, session)
             if submission is None:
                 logger.error("[new_submission] Couldn't find submission "
@@ -1273,7 +1273,7 @@ class EvaluationService(Service):
 
             for dataset_version in get_autojudge_datasets(submission.task):
                 submission_result = SubmissionResult.get_from_submission_id(
-                    submission_id, dataset_version, session)
+                    submission_id, dataset_version, session, create=True)
 
                 if to_compile(submission_result):
                     self.push_in_queue(
@@ -1390,8 +1390,8 @@ class EvaluationService(Service):
                 else:
                     dv = dataset_version
 
-                submission_result = SubmissionResult.get_from_submission_id(
-                    submission_id, dv, session)
+                sr = SubmissionResult.get_from_submission_id(
+                    submission_id, dv, session, create=True)
 
                 if level == "compilation":
                     submission_result.invalidate_compilation()
