@@ -1146,6 +1146,11 @@ class ActivateDatasetHandler(BaseHandler):
         self.application.service.scoring_service.dataset_updated(
                 task_id=task.id)
 
+        # This kicks off judging of any submissions which were previously
+        # unloved, but are now part of an autojudged taskset.
+        self.application.service.evaluation_service.search_jobs_not_done()
+        self.application.service.scoring_service.search_jobs_not_done()
+
         # Now send notifications to contestants.
         datetime = make_datetime()
 
@@ -1180,6 +1185,12 @@ class ToggleAutojudgeDatasetHandler(BaseHandler):
         dataset.autojudge = not dataset.autojudge
         self.sql_session.commit()
         self.application.service.scoring_service.reinitialize()
+
+        # This kicks off judging of any submissions which were previously
+        # unloved, but are now part of an autojudged taskset.
+        self.application.service.evaluation_service.search_jobs_not_done()
+        self.application.service.scoring_service.search_jobs_not_done()
+
         self.redirect("/task/%s" % dataset.task_id)
 
 

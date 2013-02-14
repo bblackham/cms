@@ -404,6 +404,7 @@ class ScoringService(Service):
                         self.exit()
             session.commit()
 
+    @rpc_method
     def search_jobs_not_done(self):
         """Look in the database for submissions that have not been
         scored for no good reasons. Put the missing job in the queue.
@@ -421,8 +422,13 @@ class ScoringService(Service):
                       filter_by(id=self.contest_id).first()
             for submission in contest.get_submissions():
                 for dataset_version in get_autojudge_datasets(submission.task):
-                    r = SubmissionResult.get_from_submission_id(
-                            submission.id, dataset_version, session)
+                    # We can quite happily handle a submission result that does
+                    # not yet exist.
+                    r = SubmissionResult.get_from_id(
+                        (submission.id, submission.task_id, dataset_version),
+                        session)
+                    if r is None:
+                        continue
 
                     x = (r.submission_id, r.dataset_version)
                     if r is not None and (r.evaluated()
