@@ -30,8 +30,16 @@ setDefaultNotifyCheckboxes();
 </div>
 
 <table style="width: auto;">
-<tr><td>Current dataset:</td><td><strong>{{ task.active_dataset.description }}</strong></td></tr>
-<tr><td>New dataset:</td><td><strong>{{ dataset.description }}</strong></td></tr>
+<tr>
+  <td>Current dataset:</td>
+  <td><strong>{{ task.active_dataset.description }}</strong></td>
+  <td><a href="{{ url_root }}/task/{{ task.id }}/{{ task.active_dataset.version }}">[View results]</td>
+</tr>
+<tr>
+  <td>New dataset:</td>
+  <td><strong>{{ dataset.description }}</strong></td>
+  <td><a href="{{ url_root }}/task/{{ task.id }}/{{ dataset.version }}">[View results]</td>
+</tr>
 </table>
 
 <p>
@@ -53,7 +61,7 @@ below, and wait for it to complete.
 <form action="{{ url_root }}/activate_dataset/{{ task.id }}/{{ dataset.version}}" method="POST">
 {% if len(changes) == 0 %}
 <p>Good news! At present, switching to this dataset will have no effect on the
-scores.</p>
+scores. No notifications will be sent.</p>
 {% else %}
 <p>Switching to this dataset will cause the following changes:</p>
 <table class="bordered">
@@ -96,17 +104,20 @@ scores.</p>
 {% end %}
   </tbody>
 </table>
-{% end %}
 
 <p>
 Notify:
-<a onclick="setAllNotifyCheckboxes(true);">[All]</a>
-<a onclick="setAllNotifyCheckboxes(false);">[None]</a>
-<a onclick="setDefaultNotifyCheckboxes();">[Default]</a>
+<a onclick="setAllNotifyCheckboxes(true);">[All users]</a>
+<a onclick="setAllNotifyCheckboxes(false);">[No users]</a>
+<a onclick="setDefaultNotifyCheckboxes();">[Users with visible changes only]</a>
 </p>
 <p>
 By default, users with changes to their public score, or changes to the score
 of a tokened submission, will be notified.
+</p>
+
+<p>
+The following message will be sent to the selected users:
 </p>
 
 <div class="notifications">
@@ -123,6 +134,7 @@ of a tokened submission, will be notified.
     </div>
   </div>
 </div>
+{% end %}
 
 <p>
 
