@@ -671,7 +671,7 @@ def task_score(user, task):
 
         for submission in submissions:
             sr = SubmissionResult.get_from_id(
-                (submission.id, submission.task,
+                (submission.id, submission.task_id,
                     submission.task.active_dataset_version),
                 session)
             if submission.tokened():
