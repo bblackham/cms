@@ -164,6 +164,12 @@ class YamlLoader:
 
         logger.info("Loading parameters for task %s." % name)
 
+        # These parameters are applied to a dataset, rather than the task.
+        dparams = {
+            "version": 1,
+            "description": "Default",
+        }
+
         params = {"name": name}
         assert name == conf["nome_breve"]
         params["title"] = conf["nome"]
@@ -171,10 +177,10 @@ class YamlLoader:
             logger.warning("Short name equals long name (title). "
                            "Please check.")
         params["num"] = num
-        params["time_limit"] = conf.get("timeout", None)
-        params["time_limit"] = float(params["time_limit"]) \
-                if params["time_limit"] is not None else None
-        params["memory_limit"] = conf.get("memlimit", None)
+        dparams["time_limit"] = conf.get("timeout", None)
+        dparams["time_limit"] = float(dparams["time_limit"]) \
+                if dparams["time_limit"] is not None else None
+        dparams["memory_limit"] = conf.get("memlimit", None)
         params["attachments"] = []  # FIXME - Use auxiliary
         params["statements"] = [Statement(
                 "",
@@ -189,7 +195,7 @@ class YamlLoader:
         params["primary_statements"] = "[\"\"]"
 
         # Builds the parameters that depend on the task type
-        params["managers"] = []
+        dparams["managers"] = []
         infile_param = conf.get("infile", "input.txt")
         outfile_param = conf.get("outfile", "output.txt")
 
@@ -207,7 +213,7 @@ class YamlLoader:
                 grader_filename = os.path.join(path, "sol", "grader.%s" %
                                                (lang))
                 if os.path.exists(grader_filename):
-                    params["managers"].append(Manager(
+                    dparams["managers"].append(Manager(
                         "grader.%s" % (lang),
                         self.file_cacher.put_file(
                             path=grader_filename,
@@ -220,7 +226,7 @@ class YamlLoader:
             for other_filename in os.listdir(os.path.join(path, "sol")):
                 if other_filename.endswith('.h') or \
                         other_filename.endswith('lib.pas'):
-                    params["managers"].append(Manager(
+                    dparams["managers"].append(Manager(
                         other_filename,
                         self.file_cacher.put_file(
                             path=os.path.join(path, "sol",
@@ -235,7 +241,7 @@ class YamlLoader:
         # If there is cor/correttore, then, presuming that the task
         # type is Batch or OutputOnly, we retrieve the comparator
         if os.path.exists(os.path.join(path, "cor", "correttore")):
-            params["managers"].append(Manager(
+            dparams["managers"].append(Manager(
                 "checker",
                 self.file_cacher.put_file(
                     path=os.path.join(path, "cor", "correttore"),
@@ -296,44 +302,44 @@ class YamlLoader:
                 # Close last subtask (if no subtasks were defined, just
                 # fallback to Sum)
                 if points is None:
-                    params["score_type"] = "Sum"
+                    dparams["score_type"] = "Sum"
                     total_value = float(conf.get("total_value", 100.0))
                     input_value = 0.0
                     if int(conf['n_input']) != 0:
                         input_value = total_value / int(conf['n_input'])
-                    params["score_type_parameters"] = str(input_value)
+                    dparams["score_type_parameters"] = str(input_value)
                 else:
                     subtasks.append([points, testcases])
                     assert(100 == sum([int(st[0]) for st in subtasks]))
                     assert(int(conf['n_input']) ==
                            sum([int(st[1]) for st in subtasks]))
-                    params["score_type"] = "GroupMin"
-                    params["score_type_parameters"] = str(subtasks)
+                    dparams["score_type"] = "GroupMin"
+                    dparams["score_type_parameters"] = str(subtasks)
 
         # If gen/GEN doesn't exist, just fallback to Sum
         except IOError:
-            params["score_type"] = "Sum"
+            dparams["score_type"] = "Sum"
             total_value = float(conf.get("total_value", 100.0))
             input_value = 0.0
             if int(conf['n_input']) != 0:
                 input_value = total_value / int(conf['n_input'])
-            params["score_type_parameters"] = str(input_value)
+            dparams["score_type_parameters"] = str(input_value)
 
         # If output_only is set, then the task type is OutputOnly
         if conf.get('output_only', False):
-            params["task_type"] = "OutputOnly"
-            params["time_limit"] = None
-            params["memory_limit"] = None
-            params["task_type_parameters"] = '["%s"]' % (evaluation_parameter)
+            dparams["task_type"] = "OutputOnly"
+            dparams["time_limit"] = None
+            dparams["memory_limit"] = None
+            dparams["task_type_parameters"] = '["%s"]' % (evaluation_parameter)
             params["submission_format"] = [
                 SubmissionFormatElement("output_%03d.txt" % i).export_to_dict()
                 for i in xrange(int(conf["n_input"]))]
 
         # If there is cor/manager, then the task type is Communication
         elif os.path.exists(os.path.join(path, "cor", "manager")):
-            params["task_type"] = "Communication"
-            params["task_type_parameters"] = '[]'
-            params["managers"].append(Manager(
+            dparams["task_type"] = "Communication"
+            dparams["task_type_parameters"] = '[]'
+            dparams["managers"].append(Manager(
                 "manager",
                 self.file_cacher.put_file(
                     path=os.path.join(path, "cor", "manager"),
@@ -342,7 +348,7 @@ class YamlLoader:
             for lang in Submission.LANGUAGES:
                 stub_name = os.path.join(path, "sol", "stub.%s" % lang)
                 if os.path.exists(stub_name):
-                    params["managers"].append(Manager(
+                    dparams["managers"].append(Manager(
                         "stub.%s" % lang,
                         self.file_cacher.put_file(
                             path=stub_name,
@@ -354,8 +360,8 @@ class YamlLoader:
 
         # Otherwise, the task type is Batch
         else:
-            params["task_type"] = "Batch"
-            params["task_type_parameters"] = \
+            dparams["task_type"] = "Batch"
+            dparams["task_type_parameters"] = \
                 '["%s", ["%s", "%s"], "%s"]' % \
                 (compilation_param, infile_param, outfile_param,
                  evaluation_parameter)
@@ -366,7 +372,7 @@ class YamlLoader:
                                 for x in public_testcases.split(",")]
         else:
             public_testcases = []
-        params["testcases"] = []
+        dparams["testcases"] = []
         for i in xrange(int(conf["n_input"])):
             _input = os.path.join(path, "input", "input%d.txt" % i)
             output = os.path.join(path, "output", "output%d.txt" % i)
@@ -376,12 +382,12 @@ class YamlLoader:
             output_digest = self.file_cacher.put_file(
                 path=output,
                 description="Output %d for task %s" % (i, name))
-            params["testcases"].append(Testcase(
+            dparams["testcases"].append(Testcase(
                 num=i,
                 public=(i in public_testcases),
                 input=input_digest,
                 output=output_digest).export_to_dict())
-            if params["task_type"] == "OutputOnly":
+            if dparams["task_type"] == "OutputOnly":
                 params["attachments"].append(Attachment(
                         "input_%03d.txt" % (i),
                         input_digest).export_to_dict())
@@ -400,6 +406,9 @@ class YamlLoader:
             conf.get("min_submission_interval", None)
         params["min_user_test_interval"] = \
             conf.get("min_user_test_interval", None)
+
+        params["datasets"] = [dparams]
+        params["active_dataset"] = dparams["version"]
 
         logger.info("Task parameters loaded.")
 
