@@ -53,7 +53,7 @@ class Task(Base):
         ForeignKeyConstraint(
             ['id', 'active_dataset_version'],
             ['datasets.task_id', 'datasets.version'],
-            onupdate="RESTRICT", ondelete="RESTRICT",
+            onupdate="SET DEFAULT", ondelete="SET DEFAULT",
             use_alter=True,
             name='fk_dataset_version'),
         )
@@ -174,6 +174,8 @@ class Task(Base):
         primaryjoin='and_(Task.id==Dataset.task_id, Task.active_dataset_version==Dataset.version)',
         post_update=True,
         uselist=False,
+        single_parent=True,
+        cascade='all, delete-orphan',
     )
 
     # Follows the description of the fields automatically added by

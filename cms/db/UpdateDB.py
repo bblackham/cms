@@ -1164,7 +1164,7 @@ ALTER TABLE tasks
 -- Fix all foreign key constraints.
 --
 ALTER TABLE ONLY tasks
-    ADD CONSTRAINT fk_dataset_version FOREIGN KEY (id, active_dataset_version) REFERENCES datasets(task_id, version) ON UPDATE RESTRICT ON DELETE RESTRICT;
+    ADD CONSTRAINT fk_dataset_version FOREIGN KEY (id, active_dataset_version) REFERENCES datasets(task_id, version) ON UPDATE SET DEFAULT ON DELETE SET DEFAULT;
 ALTER TABLE ONLY executables
     DROP CONSTRAINT cst_executables_submission_id_filename,
     ADD CONSTRAINT cst_executables_submission_id_filename UNIQUE (submission_id, dataset_version, filename);
