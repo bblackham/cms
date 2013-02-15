@@ -84,10 +84,10 @@ scores. No notifications will be sent.</p>
       </td>
       <td>
         {% if c.submission.user.id != prev_userid %}
-        <a href="/user/{{ c.submission.user.id }}">{{ c.submission.user.username }}</a>
+        <a href="{{ url_root }}/user/{{ c.submission.user.id }}">{{ c.submission.user.username }}</a>
         {% end %}
       </td>
-      <td><a href="/submission/{{ c.submission.id }}">{{ c.submission.id }}</a>{{ " (Tokened)" if c.submission.tokened() else "" }}</td>
+      <td><a href="{{ url_root }}/submission/{{ c.submission.id }}">{{ c.submission.id }}</a>{{ " (Tokened)" if c.submission.tokened() else "" }}</td>
       <td>
         {% if c.old_score is not None or c.new_score is not None %}
         Score: {{ c.old_score }} -&gt; {{ c.new_score }}<br/>
