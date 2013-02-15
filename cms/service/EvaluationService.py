@@ -31,6 +31,8 @@ from datetime import timedelta
 from collections import namedtuple
 import random
 
+from sqlalchemy.orm import joinedload
+
 from cms import default_argument_parser, logger
 from cms.async.AsyncLibrary import Service, rpc_method, rpc_callback
 from cms.async import ServiceCoord, get_service_shards
@@ -1356,8 +1358,10 @@ class EvaluationService(Service):
             return
 
         with SessionGen(commit=False) as session:
-            for submission_id in submission_ids:
-                submission = Submission.get_from_id(submission_id, session)
+            submissions = session.query(Submission)\
+                    .options(joinedload(Submission.task))\
+                    .filter(Submission.id.in_(submission_ids)).all()
+            for submission in submissions:
                 if dataset_version is None:
                     dv = submission.task.active_dataset_version
                 else:
@@ -1366,11 +1370,11 @@ class EvaluationService(Service):
                 jobs = [
                     JobQueueEntry(
                         EvaluationService.JOB_TYPE_COMPILATION,
-                        submission_id,
+                        submission.id,
                         dv),
                     JobQueueEntry(
                         EvaluationService.JOB_TYPE_EVALUATION,
-                        submission_id,
+                        submission.id,
                         dv),
                     ]
                 for job in jobs:
@@ -1386,15 +1390,20 @@ class EvaluationService(Service):
         # We invalidate the appropriate data and queue the jobs to
         # recompute those data.
         with SessionGen(commit=True) as session:
-            for submission_id in submission_ids:
-                submission = Submission.get_from_id(submission_id, session)
+            submissions = session.query(Submission)\
+                    .options(joinedload(Submission.task))\
+                    .options(joinedload(Submission.results))\
+                    .filter(Submission.id.in_(submission_ids)).all()
+            for submission in submissions:
                 if dataset_version is None:
                     dv = submission.task.active_dataset_version
                 else:
                     dv = dataset_version
 
-                submission_result = SubmissionResult.get_from_submission_id(
-                    submission_id, dv, session, create=True)
+                submission_result = submission.results.get(dv)
+                if submission_result is None:
+                    submission_result = SubmissionResult(
+                            submission, submission.task, dv)
 
                 if level == "compilation":
                     submission_result.invalidate_compilation()
@@ -1402,7 +1411,7 @@ class EvaluationService(Service):
                         self.push_in_queue(
                             JobQueueEntry(
                                 EvaluationService.JOB_TYPE_COMPILATION,
-                                submission_id,
+                                submission.id,
                                 dv),
                             EvaluationService.JOB_PRIORITY_HIGH,
                             submission.timestamp)
@@ -1412,7 +1421,7 @@ class EvaluationService(Service):
                         self.push_in_queue(
                             JobQueueEntry(
                                 EvaluationService.JOB_TYPE_EVALUATION,
-                                submission_id,
+                                submission.id,
                                 dv),
                             EvaluationService.JOB_PRIORITY_MEDIUM,
                             submission.timestamp)
