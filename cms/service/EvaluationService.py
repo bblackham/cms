@@ -853,7 +853,7 @@ class EvaluationService(Service):
         lost_jobs = self.pool.check_timeouts()
         for priority, timestamp, job in lost_jobs:
             logger.info("Job %r put again in the queue because of "
-                        "worker timeout." % (job))
+                        "worker timeout." % (job,))
             self.push_in_queue(job, priority, timestamp)
         return True
 
@@ -865,7 +865,7 @@ class EvaluationService(Service):
         lost_jobs = self.pool.check_connections()
         for priority, timestamp, job in lost_jobs:
             logger.info("Job %r put again in the queue because of "
-                        "disconnected worker." % (job))
+                        "disconnected worker." % (job,))
             self.push_in_queue(job, priority, timestamp)
         return True
 
