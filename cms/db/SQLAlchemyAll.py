@@ -26,6 +26,8 @@ db objects must be imported from this module.
 
 import sys
 
+from sqlalchemy.orm import joinedload
+
 from cms.db.SQLAlchemyUtils import Base, metadata, Session, \
      ScopedSession, SessionGen
 
@@ -52,7 +54,11 @@ def get_submissions(self):
     returns (list): list of submissions.
 
     """
+    # We join this load with submission results and tokens, because we almost
+    # always want it.
     return self.sa_session.query(Submission).join(Task).\
+           options(joinedload(Submission.results)).\
+           options(joinedload(Submission.token)).\
            filter(Task.contest == self).all()
 
 

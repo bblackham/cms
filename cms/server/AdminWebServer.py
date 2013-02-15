@@ -32,6 +32,7 @@ import base64
 import re
 import simplejson as json
 from sqlalchemy import and_
+from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import IntegrityError
 import tornado.web
 import tornado.locale
@@ -1603,6 +1604,10 @@ class TaskSubmissionsHandler(BaseHandler):
         self.r_params["submissions"] = \
             self.sql_session.query(Submission)\
                 .join(Task).filter(Task.id == task_id)\
+                .options(joinedload(Submission.results))\
+                .options(joinedload(Submission.user))\
+                .options(joinedload(Submission.token))\
+                .options(joinedload(Submission.files))\
                 .order_by(Submission.timestamp.desc()).all()
         self.render("submissionlist.html", **self.r_params)
 
