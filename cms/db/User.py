@@ -155,7 +155,7 @@ class User(Base):
         self.username = username
         self.password = password
         self.email = email if email is not None else ""
-        self.ip = ip if ip is not None else "0.0.0.0"
+        self.ip = ip
         self.hidden = hidden
         self.primary_statements = primary_statements \
                                   if primary_statements is not None else "{}"
