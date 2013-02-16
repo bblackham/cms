@@ -1404,6 +1404,7 @@ class EvaluationService(Service):
                 if submission_result is None:
                     submission_result = SubmissionResult(
                             submission, submission.task, dv)
+                    session.add(submission_result)
 
                 if level == "compilation":
                     submission_result.invalidate_compilation()
