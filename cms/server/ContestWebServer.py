@@ -100,12 +100,34 @@ class BaseHandler(CommonRequestHandler):
         self.r_params = self.render_params()
 
     def get_current_user(self):
-        """Gets the current user logged in from the cookies
+        """Gets the current user logged in from the cookies, or from the users'
+        ip field if the contest is configured to automatically log users in.
 
-        If a valid cookie is retrieved, return a User object with the
-        username specified in the cookie. Otherwise, return None.
+        If a valid user is found (either by automatic login or from a cookie),
+        return a User object corresponding to the logged in user.
+        Otherwise, return None.
 
         """
+        if config.ip_autologin:
+            # See if a valid user should be logged in automatically based on
+            # their IP address.
+            users = self.sql_session.query(User)\
+                .filter(User.contest == self.contest)\
+                .filter(User.ip == self.request.remote_ip)\
+                .all()
+            if len(users) == 1:
+                user = users[0]
+                return user
+
+            if len(users) > 1:
+                logger.warning(
+                    "IP autologin has multiple users with IP %s: [%s]" % (
+                        self.request.remote_ip,
+                        ', '.join([u.username for u in users])))
+
+            # Fallback to normal auth. If the user already has a cookie, we let
+            # them use it to stay authenticated.
+
         if self.get_secure_cookie("login") is None:
             return None
         try:

@@ -79,6 +79,7 @@ class User(Base):
     # User can log in CWS only from this ip.
     ip = Column(
         String,
+        index=True,
         nullable=True)
 
     # A hidden user is used only for debugging purpose.

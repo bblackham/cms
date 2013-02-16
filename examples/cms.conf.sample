@@ -89,6 +89,11 @@
     "_help": "from anywhere.",
     "ip_lock": true,
 
+    "_help": "If enabled, users will be automatically logged in if they",
+    "_help": "connect from the IP address matching their entry in the",
+    "_help": "database.",
+    "ip_autologin": false,
+
     "_help": "Whether hidden users are allowed to log in.",
     "block_hidden_users": false,
 
