@@ -72,6 +72,7 @@ class ScriptsContainer(object):
             ("20121116", "rename_user_test_limits"),
             ("20121207", "rename_score_parameters"),
             ("20121208", "add_score_precision"),
+            ("20130216", "index_user_ip"),
             ]
         self.list.sort()
 
@@ -979,6 +980,15 @@ RENAME COLUMN score_parameters TO score_type_parameters;""")
                 session.execute("ALTER TABLE %(table)s "
                                 "ALTER COLUMN score_precision SET NOT NULL;" %
                                 {"table": table})
+
+    @staticmethod
+    def index_user_ip():
+        """Add index for the ip field of users table.
+
+        """
+        with SessionGen(commit=True) as session:
+            session.execute(
+                "CREATE INDEX ix_users_ip ON users USING btree (ip);")
 
 
 def execute_single_script(scripts_container, script):
