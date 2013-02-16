@@ -252,7 +252,7 @@ class BaseHandler(CommonRequestHandler):
         ret["timestamp"] = self.timestamp
         ret["contest"] = self.contest
         ret["url_root"] = get_url_root(self.request.path)
-        ret["cookie"] = str(self.cookies)  # FIXME really needed?
+        ret["cookies"] = self.cookies
 
         ret["phase"] = self.contest.phase(self.timestamp)
 
