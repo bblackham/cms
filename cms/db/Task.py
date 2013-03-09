@@ -51,8 +51,8 @@ class Task(Base):
                          name='cst_task_contest_id_name'),
         CheckConstraint("token_initial <= token_max"),
         ForeignKeyConstraint(
-            ['id', 'active_dataset_version'],
-            ['datasets.task_id', 'datasets.version'],
+            ('id', 'active_dataset_version'),
+            ('datasets.task_id', 'datasets.version'),
             onupdate="SET DEFAULT", ondelete="SET DEFAULT",
             use_alter=True,
             name='fk_dataset_version'),
@@ -411,10 +411,10 @@ class Testcase(Base):
         UniqueConstraint('task_id', 'dataset_version', 'num',
                          name='cst_task_testcases_task_id_num'),
         ForeignKeyConstraint(
-            ['task_id', 'dataset_version'],
-            [Dataset.task_id, Dataset.version],
+            ('task_id', 'dataset_version'),
+            (Dataset.task_id, Dataset.version),
             onupdate="CASCADE", ondelete="CASCADE"),
-    )
+        )
 
     # Auto increment primary key.
     id = Column(
@@ -550,8 +550,8 @@ class Manager(Base):
         UniqueConstraint('task_id', 'dataset_version', 'filename',
                          name='cst_managers_task_id_dataset_version_filename'),
         ForeignKeyConstraint(
-            ['task_id', 'dataset_version'],
-            [Dataset.task_id, Dataset.version],
+            ('task_id', 'dataset_version'),
+            (Dataset.task_id, Dataset.version),
             onupdate="CASCADE", ondelete="CASCADE"),
         )
 

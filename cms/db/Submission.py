@@ -165,8 +165,8 @@ class SubmissionResult(Base):
         UniqueConstraint('submission_id', 'task_id', 'dataset_version',
                          name='cst_submission_results_id_version'),
         ForeignKeyConstraint(
-            ['task_id', 'dataset_version'],
-            [Dataset.task_id, Dataset.version],
+            ('task_id', 'dataset_version'),
+            (Dataset.task_id, Dataset.version),
             onupdate="CASCADE", ondelete="CASCADE"),
         )
 
@@ -518,13 +518,13 @@ class Executable(Base):
     __tablename__ = 'executables'
     __table_args__ = (
         ForeignKeyConstraint(
-            ['submission_id', 'task_id', 'dataset_version'],
-            [SubmissionResult.submission_id, SubmissionResult.task_id,
-                SubmissionResult.dataset_version],
+            ('submission_id', 'task_id', 'dataset_version'),
+            (SubmissionResult.submission_id, SubmissionResult.task_id,
+                SubmissionResult.dataset_version),
             onupdate="CASCADE", ondelete="CASCADE"),
         ForeignKeyConstraint(
-            ['task_id', 'dataset_version'],
-            [Dataset.task_id, Dataset.version],
+            ('task_id', 'dataset_version'),
+            (Dataset.task_id, Dataset.version),
             onupdate="CASCADE", ondelete="CASCADE"),
         UniqueConstraint('submission_id', 'dataset_version', 'filename',
                          name='cst_executables_submission_id_filename'),
@@ -593,13 +593,13 @@ class Evaluation(Base):
     __tablename__ = 'evaluations'
     __table_args__ = (
         ForeignKeyConstraint(
-            ['submission_id', 'task_id', 'dataset_version'],
-            [SubmissionResult.submission_id, SubmissionResult.task_id,
-                SubmissionResult.dataset_version],
+            ('submission_id', 'task_id', 'dataset_version'),
+            (SubmissionResult.submission_id, SubmissionResult.task_id,
+                SubmissionResult.dataset_version),
             onupdate="CASCADE", ondelete="CASCADE"),
         ForeignKeyConstraint(
-            ['task_id', 'dataset_version'],
-            [Dataset.task_id, Dataset.version],
+            ('task_id', 'dataset_version'),
+            (Dataset.task_id, Dataset.version),
             onupdate="CASCADE", ondelete="CASCADE"),
         UniqueConstraint('submission_id', 'dataset_version', 'num',
                          name='cst_evaluations_submission_id_num'),
