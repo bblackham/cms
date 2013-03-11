@@ -543,13 +543,20 @@ class Executable(Base):
         String,
         nullable=False)
 
-    # Submission id of the submission.
+    # Submission id and object of the submission.
     submission_id = Column(
         Integer,
         ForeignKey(Submission.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
+
+    submission = relationship(
+        Submission,
+        backref=backref("executables",
+                        collection_class=smart_mapped_collection('dataset_version'),
+                        cascade="all, delete-orphan",
+                        passive_deletes=True))
 
     # Task of the object (needed for foreign key relation to Datasets).
     task_id = Column(
