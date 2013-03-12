@@ -51,7 +51,7 @@ def to_compile(submission_result):
 
     """
     r = submission_result
-    return r is None or (not r.compiled() and \
+    return r is None or (not r.compiled() and
         r.compilation_tries < EvaluationService.MAX_COMPILATION_TRIES)
 
 
@@ -690,8 +690,10 @@ class EvaluationService(Service):
             # not yet reached the limit of tries.
             for submission in contest.get_submissions():
                 for dataset_version in get_autojudge_datasets(submission.task):
-                    submission_result = SubmissionResult.get_from_submission_id(
-                        submission.id, dataset_version, session, create=True)
+                    submission_result = \
+                        SubmissionResult.get_from_submission_id(
+                            submission.id, dataset_version, session,
+                            create=True)
                     if to_compile(submission_result):
                         if self.push_in_queue(
                             JobQueueEntry(
@@ -921,7 +923,8 @@ class EvaluationService(Service):
         """Push a job in the job queue if the submission is not
         already in the queue or assigned to a worker.
 
-        job (JobQueueEntry): (job_type, submission_id, dataset_version) to push.
+        job (JobQueueEntry): (job_type, submission_id, dataset_version) to
+                             push.
 
         return (bool): True if pushed, False if not.
 

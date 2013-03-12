@@ -150,7 +150,8 @@ class CompilationJob(Job):
             for manager_filename in user_test.task.active_dataset.managers:
                 if manager_filename not in job.managers:
                     job.managers[manager_filename] = \
-                        user_test.task.active_dataset.managers[manager_filename]
+                        user_test.task.active_dataset.managers[
+                            manager_filename]
 
         return job
 
@@ -295,7 +296,8 @@ class EvaluationJob(Job):
             for manager_filename in user_test.task.active_dataset.managers:
                 if manager_filename not in job.managers:
                     job.managers[manager_filename] = \
-                        user_test.task.active_dataset.managers[manager_filename]
+                        user_test.task.active_dataset.managers[
+                            manager_filename]
 
         return job
 

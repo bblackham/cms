@@ -981,7 +981,6 @@ RENAME COLUMN score_parameters TO score_type_parameters;""")
                                 "ALTER COLUMN score_precision SET NOT NULL;" %
                                 {"table": table})
 
-
     @staticmethod
     def use_task_datasets():
         """Completely restructure the database to support task datasets.
@@ -991,7 +990,8 @@ RENAME COLUMN score_parameters TO score_type_parameters;""")
         """
         with SessionGen(commit=True) as session:
             # It's worth noting that SQLAlchemy will have already created the
-            # two new tables submission_results and datasets for us. We just have to do everything *else!*
+            # two new tables submission_results and datasets for us. We just
+            # have to do everything *else!*
             session.execute('''
 --
 -- Create datasets table.
@@ -1002,7 +1002,7 @@ RENAME COLUMN score_parameters TO score_type_parameters;""")
 SELECT pg_catalog.setval('datasets_version_seq', 2, true);
 
 -- Populate datasets table with data from tasks.
-INSERT INTO datasets (SELECT 
+INSERT INTO datasets (SELECT
     id,
     1,
     'Default',
@@ -1020,7 +1020,7 @@ INSERT INTO datasets (SELECT
 --
 
 -- Copy data from submissions.
-INSERT INTO submission_results (SELECT 
+INSERT INTO submission_results (SELECT
     id, task_id, 1,
     compilation_outcome,
     compilation_text,
@@ -1094,7 +1094,8 @@ CREATE SEQUENCE evaluations_id_seq_
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
-SELECT pg_catalog.setval('evaluations_id_seq_', last_value, true) FROM evaluations_id_seq;
+SELECT pg_catalog.setval('evaluations_id_seq_', last_value, true)
+    FROM evaluations_id_seq;
 
 -- Now kill the old table.
 DROP TABLE evaluations;
@@ -1104,19 +1105,37 @@ ALTER TABLE evaluations_ RENAME TO evaluations;
 
 ALTER SEQUENCE evaluations_id_seq OWNED BY evaluations.id;
 
-ALTER TABLE ONLY evaluations ALTER COLUMN id SET DEFAULT nextval('evaluations_id_seq'::regclass);
+ALTER TABLE ONLY evaluations ALTER COLUMN id
+    SET DEFAULT nextval('evaluations_id_seq'::regclass);
 ALTER TABLE ONLY evaluations
-    ADD CONSTRAINT cst_evaluations_submission_id_num UNIQUE (submission_id, dataset_version, num);
+    ADD CONSTRAINT cst_evaluations_submission_id_num
+        UNIQUE (submission_id, dataset_version, num);
 ALTER TABLE ONLY evaluations
     ADD CONSTRAINT evaluations_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY evaluations
-    ADD CONSTRAINT evaluations_submission_id_fkey FOREIGN KEY (submission_id, task_id, dataset_version) REFERENCES submission_results(submission_id, task_id, dataset_version) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT evaluations_submission_id_fkey
+        FOREIGN KEY (submission_id, task_id, dataset_version)
+        REFERENCES submission_results(submission_id, task_id, dataset_version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY evaluations
-    ADD CONSTRAINT evaluations_submission_id_fkey1 FOREIGN KEY (submission_id) REFERENCES submissions(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT evaluations_submission_id_fkey1
+        FOREIGN KEY (submission_id)
+        REFERENCES submissions(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY evaluations
-    ADD CONSTRAINT evaluations_task_id_fkey FOREIGN KEY (task_id, dataset_version) REFERENCES datasets(task_id, version) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT evaluations_task_id_fkey
+        FOREIGN KEY (task_id, dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY evaluations
-    ADD CONSTRAINT evaluations_task_id_fkey1 FOREIGN KEY (task_id) REFERENCES tasks(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT evaluations_task_id_fkey1
+        FOREIGN KEY (task_id)
+        REFERENCES tasks(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 
 
 --
@@ -1126,7 +1145,8 @@ ALTER TABLE executables ADD COLUMN task_id integer;
 ALTER TABLE executables ADD COLUMN dataset_version integer;
 
 -- Pre-populate with the right task id.
-UPDATE executables SET task_id = s.task_id, dataset_version = 1 FROM submissions s WHERE executables.submission_id = s.id;
+UPDATE executables SET task_id = s.task_id, dataset_version = 1
+    FROM submissions s WHERE executables.submission_id = s.id;
 ALTER TABLE executables ALTER COLUMN task_id SET NOT NULL;
 
 --
@@ -1164,46 +1184,89 @@ ALTER TABLE tasks
 -- Fix all foreign key constraints.
 --
 ALTER TABLE ONLY tasks
-    ADD CONSTRAINT fk_dataset_version FOREIGN KEY (id, active_dataset_version) REFERENCES datasets(task_id, version) ON UPDATE SET DEFAULT ON DELETE SET DEFAULT;
+    ADD CONSTRAINT fk_dataset_version FOREIGN KEY (id, active_dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE SET DEFAULT
+        ON DELETE SET DEFAULT;
 ALTER TABLE ONLY executables
     DROP CONSTRAINT cst_executables_submission_id_filename,
-    ADD CONSTRAINT cst_executables_submission_id_filename UNIQUE (submission_id, dataset_version, filename);
+    ADD CONSTRAINT cst_executables_submission_id_filename
+    UNIQUE (submission_id, dataset_version, filename);
 ALTER TABLE ONLY executables
     DROP CONSTRAINT executables_submission_id_fkey,
-    ADD CONSTRAINT executables_submission_id_fkey FOREIGN KEY (submission_id, task_id, dataset_version) REFERENCES submission_results(submission_id, task_id, dataset_version) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT executables_submission_id_fkey
+        FOREIGN KEY (submission_id, task_id, dataset_version)
+        REFERENCES submission_results(submission_id, task_id, dataset_version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY executables
-    ADD CONSTRAINT executables_submission_id_fkey1 FOREIGN KEY (submission_id) REFERENCES submissions(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT executables_submission_id_fkey1
+        FOREIGN KEY (submission_id)
+        REFERENCES submissions(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY executables
-    ADD CONSTRAINT executables_task_id_fkey FOREIGN KEY (task_id, dataset_version) REFERENCES datasets(task_id, version) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT executables_task_id_fkey
+        FOREIGN KEY (task_id, dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY executables
-    ADD CONSTRAINT executables_task_id_fkey1 FOREIGN KEY (task_id) REFERENCES tasks(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT executables_task_id_fkey1
+        FOREIGN KEY (task_id)
+        REFERENCES tasks(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY managers
     DROP CONSTRAINT cst_managers_task_id_filename,
-    ADD CONSTRAINT cst_managers_task_id_dataset_version_filename UNIQUE (task_id, dataset_version, filename);
+    ADD CONSTRAINT cst_managers_task_id_dataset_version_filename
+        UNIQUE (task_id, dataset_version, filename);
 ALTER TABLE ONLY managers
     DROP CONSTRAINT managers_task_id_fkey,
-    ADD CONSTRAINT managers_task_id_fkey FOREIGN KEY (task_id, dataset_version) REFERENCES datasets(task_id, version) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT managers_task_id_fkey FOREIGN KEY (task_id, dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY managers
-    ADD CONSTRAINT managers_task_id_fkey1 FOREIGN KEY (task_id) REFERENCES tasks(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT managers_task_id_fkey1 FOREIGN KEY (task_id)
+        REFERENCES tasks(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY task_testcases
     DROP CONSTRAINT cst_task_testcases_task_id_num,
-    ADD CONSTRAINT cst_task_testcases_task_id_num UNIQUE (task_id, dataset_version, num);
+    ADD CONSTRAINT cst_task_testcases_task_id_num
+        UNIQUE (task_id, dataset_version, num);
 ALTER TABLE ONLY task_testcases
     DROP CONSTRAINT task_testcases_task_id_fkey,
-    ADD CONSTRAINT task_testcases_task_id_fkey FOREIGN KEY (task_id, dataset_version) REFERENCES datasets(task_id, version) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT task_testcases_task_id_fkey
+        FOREIGN KEY (task_id, dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 ALTER TABLE ONLY task_testcases
-    ADD CONSTRAINT task_testcases_task_id_fkey1 FOREIGN KEY (task_id) REFERENCES tasks(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT task_testcases_task_id_fkey1
+        FOREIGN KEY (task_id)
+        REFERENCES tasks(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
 
 --
 -- Finally, create new indexes.
 --
-CREATE INDEX ix_evaluations_dataset_version ON evaluations USING btree (dataset_version);
-CREATE INDEX ix_evaluations_submission_id ON evaluations USING btree (submission_id);
-CREATE INDEX ix_evaluations_task_id ON evaluations USING btree (task_id);
-CREATE INDEX ix_executables_dataset_version ON executables USING btree (dataset_version);
-CREATE INDEX ix_executables_task_id ON executables USING btree (task_id);
-CREATE INDEX ix_managers_dataset_version ON managers USING btree (dataset_version);
-CREATE INDEX ix_task_testcases_dataset_version ON task_testcases USING btree (dataset_version);
+CREATE INDEX ix_evaluations_dataset_version ON evaluations
+    USING btree (dataset_version);
+CREATE INDEX ix_evaluations_submission_id ON evaluations
+    USING btree (submission_id);
+CREATE INDEX ix_evaluations_task_id ON evaluations
+    USING btree (task_id);
+CREATE INDEX ix_executables_dataset_version ON executables
+    USING btree (dataset_version);
+CREATE INDEX ix_executables_task_id ON executables
+    USING btree (task_id);
+CREATE INDEX ix_managers_dataset_version ON managers
+    USING btree (dataset_version);
+CREATE INDEX ix_task_testcases_dataset_version ON task_testcases
+    USING btree (dataset_version);
 
 COMMIT;
 ''')

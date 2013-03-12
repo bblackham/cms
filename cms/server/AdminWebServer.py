@@ -825,7 +825,8 @@ class DeleteManagerHandler(BaseHandler):
 
 
 # TODO: Move this somewhere more appropriate?
-def copy_dataset(new_dataset, old_dataset, clone_results, clone_managers, sql_session):
+def copy_dataset(new_dataset, old_dataset, clone_results, clone_managers,
+                 sql_session):
     """Copy an existing dataset's test cases, and optionally
     submission results and managers.
 
@@ -867,7 +868,7 @@ def copy_dataset(new_dataset, old_dataset, clone_results, clone_managers, sql_se
                 SubmissionResult.dataset_version == old_dataset.version)).\
             all()
         for sr in results:
-            # TODO: Brrr. Would be better to use export_to_dict/import_from_dict.
+            # TODO: Would be better to use export_to_dict/import_from_dict.
             # Create the submission result.
             new_sr = SubmissionResult(
                 submission=sr.submission,
@@ -1027,7 +1028,7 @@ class AddDatasetHandler(BaseHandler):
 
         # If the task does not yet have an active dataset, make this
         # one active.
-        if task.active_dataset == None:
+        if task.active_dataset is None:
             task.active_dataset = dataset
             self.sql_session.commit()
 
@@ -1488,7 +1489,8 @@ class TaskHandler(BaseHandler):
                 dataset.task_type = self.get_argument(
                     "task_type_%d" % dataset.version, "")
                 # Look for a task type with the specified name.
-                task_type_class = sanity_check_task_type_class(dataset.task_type)
+                task_type_class = sanity_check_task_type_class(
+                    dataset.task_type)
 
                 dataset.task_type_parameters = json.dumps(
                     task_type_class.parse_handler(

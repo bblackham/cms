@@ -398,8 +398,9 @@ class ScoringService(Service):
                             get_score_type(task=task,
                             dataset_version=dataset.version)
                     except Exception as error:
-                        logger.critical("Cannot get score type for task %s(%d): %r" %
-                                        (task.name, dataset.version, error))
+                        logger.critical(
+                            "Cannot get score type for task %s(%d): %r" %
+                                (task.name, dataset.version, error))
                         logger.critical(traceback.format_exc())
                         self.exit()
             session.commit()
@@ -478,10 +479,8 @@ class ScoringService(Service):
                     (to_score, to_token))
 
         for unused_i in xrange(to_score_now):
-            with SessionGen(commit=False) as session:
-                submission_id, dataset_version = self.\
-                    submission_ids_to_score.pop()
-                self.new_evaluation(submission_id, dataset_version)
+            submission_id, dataset_version = self.submission_ids_to_score.pop()
+            self.new_evaluation(submission_id, dataset_version)
         if to_score - to_score_now > 0:
             return True
 
@@ -725,7 +724,8 @@ class ScoringService(Service):
                 scorer.pool[submission_id]["public_score"]
 
             # And details.
-            submission_result.score_details = scorer.pool[submission_id]["details"]
+            submission_result.score_details = \
+                scorer.pool[submission_id]["details"]
             submission_result.public_score_details = \
                 scorer.pool[submission_id]["public_details"]
             submission_result.ranking_score_details = \
@@ -876,7 +876,6 @@ class ScoringService(Service):
             self.add_timeout(self.score_old_submissions, None,
                              0.5, immediately=False)
 
-
     @rpc_method
     def dataset_updated(self, task_id):
         """This function updates RWS with new data about a task. It should be
@@ -913,7 +912,6 @@ class ScoringService(Service):
                     except (json.decoder.JSONDecodeError, TypeError):
                         # It may be blank.
                         ranking_score_details = None
-
 
                 # Data to send to remote rankings.
                 subchange_id = "%s%ss" % \

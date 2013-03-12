@@ -171,7 +171,8 @@ class Task(Base):
     # Provide easy access to the active dataset object.
     active_dataset = relationship(
         'Dataset',
-        primaryjoin='and_(Task.id==Dataset.task_id, Task.active_dataset_version==Dataset.version)',
+        primaryjoin='and_(Task.id==Dataset.task_id, '
+            'Task.active_dataset_version==Dataset.version)',
         post_update=True,
         uselist=False,
         single_parent=True,

@@ -116,8 +116,9 @@ class AbstractTaskFromDB(AbstractTask):
 
         """
         try:
-            self.file_cacher.get_file(self.task.active_dataset.managers[filename].digest,
-                                      file_obj=file_obj)
+            self.file_cacher.get_file(
+                    self.task.active_dataset.managers[filename].digest,
+                    file_obj=file_obj)
             return True
         except KeyError:
             return False

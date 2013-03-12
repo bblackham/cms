@@ -519,7 +519,7 @@ class Executable(Base):
     __table_args__ = (
         ForeignKeyConstraint(
             ['submission_id', 'task_id', 'dataset_version'],
-            [SubmissionResult.submission_id, SubmissionResult.task_id, \
+            [SubmissionResult.submission_id, SubmissionResult.task_id,
                 SubmissionResult.dataset_version],
             onupdate="CASCADE", ondelete="CASCADE"),
         ForeignKeyConstraint(
@@ -594,7 +594,7 @@ class Evaluation(Base):
     __table_args__ = (
         ForeignKeyConstraint(
             ['submission_id', 'task_id', 'dataset_version'],
-            [SubmissionResult.submission_id, SubmissionResult.task_id, \
+            [SubmissionResult.submission_id, SubmissionResult.task_id,
                 SubmissionResult.dataset_version],
             onupdate="CASCADE", ondelete="CASCADE"),
         ForeignKeyConstraint(
