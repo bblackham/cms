@@ -124,9 +124,9 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
 
     <p>
       {% if task.active_dataset_version == dataset.version %}
-      [Make Live]
+      [Make Live ...]
       {% else %}
-      <a href="{{ url_root }}/activate_dataset/{{ task.id }}/{{ dataset.version }}">[Make Live]</a>
+      <a href="{{ url_root }}/activate_dataset/{{ task.id }}/{{ dataset.version }}">[Make Live ...]</a>
       {% end %}
       <a href="{{ url_root }}/add_dataset/{{ task.id }}/{{ dataset.version }}">[Clone]</a>
       <a href="{{ url_root }}/rename_dataset/{{ task.id }}/{{ dataset.version }}">[Rename]</a>
