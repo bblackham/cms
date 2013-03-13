@@ -327,7 +327,7 @@ class ScoringService(Service):
         # the method "score_old_submission".
         #
         # submission_ids_to_score and submission_ids_scored contain
-        # pairs of (submission_id, dataset_version).
+        # pairs of (submission_id, dataset_id).
         #
         # submission_ids_to_token contains paris of
         #   (submission_id, token timestamp).
@@ -394,13 +394,13 @@ class ScoringService(Service):
             for task in contest.tasks:
                 for dataset in task.datasets.itervalues():
                     try:
-                        self.scorers[(task.id, dataset.version)] = \
+                        self.scorers[dataset.id] = \
                             get_score_type(task=task,
-                            dataset_version=dataset.version)
+                            dataset_id=dataset.id)
                     except Exception as error:
                         logger.critical(
                             "Cannot get score type for task %s(%d): %r" %
-                                (task.name, dataset.version, error))
+                                (task.name, dataset.id, error))
                         logger.critical(traceback.format_exc())
                         self.exit()
             session.commit()
@@ -422,16 +422,16 @@ class ScoringService(Service):
             contest = session.query(Contest).\
                       filter_by(id=self.contest_id).first()
             for submission in contest.get_submissions():
-                for dataset_version in get_autojudge_datasets(submission.task):
+                for dataset in get_autojudge_datasets(submission.task):
                     # If a submission result does not yet exist, then we don't
                     # need to score it.
                     r = SubmissionResult.get_from_id(
-                        (submission.id, submission.task_id, dataset_version),
+                        (submission.id, dataset.id),
                         session)
                     if r is None:
                         continue
 
-                    x = (r.submission_id, r.dataset_version)
+                    x = (r.submission_id, r.dataset_id)
                     if r is not None and (r.evaluated()
                         or r.compilation_outcome == "fail") \
                             and x not in self.submission_ids_scored:
@@ -479,8 +479,8 @@ class ScoringService(Service):
                     (to_score, to_token))
 
         for unused_i in xrange(to_score_now):
-            submission_id, dataset_version = self.submission_ids_to_score.pop()
-            self.new_evaluation(submission_id, dataset_version)
+            submission_id, dataset_id = self.submission_ids_to_score.pop()
+            self.new_evaluation(submission_id, dataset_id)
         if to_score - to_score_now > 0:
             return True
 
@@ -651,7 +651,7 @@ class ScoringService(Service):
                 self.initialize_queue.add(ranking)
 
     @rpc_method
-    def new_evaluation(self, submission_id, dataset_version):
+    def new_evaluation(self, submission_id, dataset_id):
         """This RPC inform ScoringService that ES finished the work on
         a submission (either because it has been evaluated, or because
         the compilation failed).
@@ -661,8 +661,8 @@ class ScoringService(Service):
 
         """
         with SessionGen(commit=True) as session:
-            submission_result = SubmissionResult.get_from_submission_id(
-                submission_id, dataset_version, session)
+            submission_result = SubmissionResult.get_from_id(
+                (submission_id, dataset_id), session)
 
             if submission_result is None:
                 logger.error("[new_evaluation] Couldn't find "
@@ -674,13 +674,13 @@ class ScoringService(Service):
             if not submission_result.compiled():
                 logger.warning("[new_evaluation] Submission %d(%d) "
                                "is not compiled." % (
-                               submission_id, dataset_version))
+                               submission_id, dataset_id))
                 return
             elif submission_result.compilation_outcome == "ok" \
                     and not submission_result.evaluated():
                 logger.warning("[new_evaluation] Submission %d(%d) compiled "
                                "correctly but is not evaluated."
-                               % (submission_id, dataset_version))
+                               % (submission_id, dataset_id))
                 return
             elif submission.user.hidden:
                 logger.info("[new_evaluation] Submission %d not scored "
@@ -688,7 +688,7 @@ class ScoringService(Service):
                 return
 
             # Assign score to the submission.
-            scorer = self.scorers.get((submission.task_id, dataset_version))
+            scorer = self.scorers.get(dataset_id)
             if scorer is None:
                 # We may get here because the scorer threw an exception whilst
                 # initalizing, or we may be scoring for the wrong contest.
@@ -698,7 +698,7 @@ class ScoringService(Service):
                 return
 
             try:
-                scorer.add_submission(submission_id, dataset_version,
+                scorer.add_submission(submission_id, dataset_id,
                       submission.timestamp,
                       submission.user.username,
                       submission_result.evaluated(),
@@ -716,7 +716,7 @@ class ScoringService(Service):
                 return
 
             # Mark submission as scored.
-            self.submission_ids_scored.add((submission_id, dataset_version))
+            self.submission_ids_scored.add((submission_id, dataset_id))
 
             # Filling submission's score info in the db.
             submission_result.score = scorer.pool[submission_id]["score"]
@@ -740,7 +740,7 @@ class ScoringService(Service):
 
             # If we are not a live dataset then we can bail out here, and avoid
             # updating RWS.
-            if dataset_version != submission.task.active_dataset_version:
+            if dataset_id != submission.task.active_dataset_id:
                 return
 
             # Data to send to remote rankings.
@@ -826,22 +826,32 @@ class ScoringService(Service):
     def invalidate_submission(self,
                               submission_id=None,
                               user_id=None,
-                              dataset_version=None,
+                              dataset_id=None,
                               task_id=None):
         """Request for invalidating the scores of some submissions.
 
-        The scores to be cleared are the one regarding 1) a submission
-        or 2) all submissions of a user or 3) all submissions of a
-        task or 4) all submission (if all parameters are None).
+        The scores to be cleared are the one regarding
+            1) a submission (only submission_id and dataset_id given)
+         or 2) all submissions of a user for the active dataset (only user_id
+               given)
+         or 3) all submissions for a dataset (only dataset_id given)
 
         submission_id (int): id of the submission to invalidate, or
                              None.
         user_id (int): id of the user we want to invalidate, or None.
-        task_id (int): id of the task we want to invalidate, or None.
-        dataset_version (int): dataset version of task to invalidate, or None.
+        dataset_id (int): id of the dataset we want to invalidate, or None.
 
         """
         logger.info("Invalidation request received.")
+
+        # If we are invalidating a dataset, get the task so we can find all the
+        # relevant submissions.
+        if submission_id is None and dataset_id is not None:
+            with SessionGen(commit=False) as session:
+                dataset = Dataset.get_from_id(dataset_id, session)
+                task_id = dataset.task_id
+        else:
+            task_id = None
 
         submission_ids = get_submissions(
             self.contest_id,
@@ -855,19 +865,19 @@ class ScoringService(Service):
         with SessionGen(commit=True) as session:
             for submission_id in submission_ids:
                 submission = Submission.get_from_id(submission_id, session)
-                if dataset_version is None:
-                    dv = submission.task.active_dataset_version
+                if dataset_id is None:
+                    this_dataset_id = submission.task.active_dataset_id
                 else:
-                    dv = dataset_version
-                sr = SubmissionResult.get_from_submission_id(
-                    submission_id, dv, session)
+                    this_dataset_id = dataset_id
+                sr = SubmissionResult.get_from_id(
+                    (submission_id, this_dataset_id), session)
                 # If the submission is not evaluated, it does not have
                 # a score to invalidate, and, when evaluated,
                 # ScoringService will be prompted to score it. So in
                 # that case we do not have to do anything.
                 if sr is not None and sr.evaluated():
                     sr.invalidate_score()
-                    new_submission_ids.append((submission_id, dv))
+                    new_submission_ids.append((submission_id, this_dataset_id))
 
         old_s = len(self.submission_ids_to_score)
         old_t = len(self.submission_ids_to_token)
@@ -886,10 +896,10 @@ class ScoringService(Service):
         """
         with SessionGen(commit=False) as session:
             task = Task.get_from_id(task_id, session)
-            dv = task.active_dataset_version
+            dataset_id = task.active_dataset_id
 
         logger.info("Dataset update for task %d (dataset now is %d)." % (
-            task_id, dv))
+            task_id, dataset_id))
 
         submission_ids = get_submissions(self.contest_id, task_id=task_id)
 
@@ -897,8 +907,8 @@ class ScoringService(Service):
         with SessionGen(commit=False) as session:
             for submission_id in submission_ids:
                 submission = Submission.get_from_id(submission_id, session)
-                submission_result = SubmissionResult.get_from_submission_id(
-                    submission_id, dv, session)
+                submission_result = SubmissionResult.get_from_id(
+                    (submission_id, dataset_id), session)
 
                 if submission_result is None:
                     # Not yet compiled, evaluated or scored.

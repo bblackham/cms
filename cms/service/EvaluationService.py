@@ -37,7 +37,7 @@ from cms import default_argument_parser, logger
 from cms.async.AsyncLibrary import Service, rpc_method, rpc_callback
 from cms.async import ServiceCoord, get_service_shards
 from cms.db import ask_for_contest
-from cms.db.SQLAlchemyAll import Contest, Evaluation, \
+from cms.db.SQLAlchemyAll import Contest, Evaluation, Dataset, \
      Submission, SubmissionResult, SessionGen, UserTest, UserTestExecutable
 from cms.service import get_submissions, get_autojudge_datasets
 from cmscommon.DateTime import make_datetime, make_timestamp
@@ -100,7 +100,7 @@ def user_test_to_evaluate(user_test):
 
 # job_type is a constant defined in EvaluationService.
 JobQueueEntry = namedtuple('JobQueueEntry',
-    ['job_type', 'submission_id', 'dataset_version'])
+    ['job_type', 'submission_id', 'dataset_id'])
 
 
 class JobQueue:
@@ -411,24 +411,22 @@ class WorkerPool:
         # And finally we ask the worker to do the job
         action = job.job_type
         object_id = job.submission_id
-        dataset_version = job.dataset_version
+        dataset_id = job.dataset_id
         timestamp = side_data[1]
         queue_time = self._start_time[shard] - timestamp
         logger.info("Asking worker %s to %s submission/user test %d(%r) "
                     " (%s after submission)." %
-                    (shard, action, object_id, dataset_version, queue_time))
+                    (shard, action, object_id, dataset_id, queue_time))
 
         with SessionGen(commit=False) as session:
             if action == EvaluationService.JOB_TYPE_COMPILATION:
                 submission = Submission.get_from_id(object_id,
                                                     session)
-                job_ = CompilationJob.from_submission(submission,
-                    dataset_version)
+                job_ = CompilationJob.from_submission(submission, dataset_id)
             elif action == EvaluationService.JOB_TYPE_EVALUATION:
                 submission = Submission.get_from_id(object_id,
                                                     session)
-                job_ = EvaluationJob.from_submission(submission,
-                    dataset_version)
+                job_ = EvaluationJob.from_submission(submission, dataset_id)
             elif action == EvaluationService.JOB_TYPE_TEST_COMPILATION:
                 user_test = UserTest.get_from_id(object_id,
                                                  session)
@@ -443,8 +441,7 @@ class WorkerPool:
             self._worker[shard].execute_job(
                 job_dict=job_.export_to_dict(),
                 callback=self._service.action_finished.im_func,
-                plus=(action, object_id, dataset_version, side_data, shard))
-
+                plus=(action, object_id, dataset_id, side_data, shard))
         return shard
 
     def release_worker(self, shard):
@@ -691,17 +688,16 @@ class EvaluationService(Service):
             # Only adding submission not compiled/evaluated that have
             # not yet reached the limit of tries.
             for submission in contest.get_submissions():
-                for dataset_version in get_autojudge_datasets(submission.task):
+                for dataset in get_autojudge_datasets(submission.task):
                     submission_result = \
-                        SubmissionResult.get_from_submission_id(
-                            submission.id, dataset_version, session,
-                            create=True)
+                        SubmissionResult.get_from_id_or_create(
+                            submission.id, dataset.id, session)
                     if to_compile(submission_result):
                         if self.push_in_queue(
                             JobQueueEntry(
                                 EvaluationService.JOB_TYPE_COMPILATION,
                                 submission.id,
-                                dataset_version),
+                                dataset.id),
                             EvaluationService.JOB_PRIORITY_HIGH,
                             submission.timestamp):
                             new_jobs += 1
@@ -710,7 +706,7 @@ class EvaluationService(Service):
                             JobQueueEntry(
                                 EvaluationService.JOB_TYPE_EVALUATION,
                                 submission.id,
-                                dataset_version),
+                                dataset.id),
                             EvaluationService.JOB_PRIORITY_MEDIUM,
                             submission.timestamp):
                             new_jobs += 1
@@ -873,7 +869,7 @@ class EvaluationService(Service):
             self.push_in_queue(job, priority, timestamp)
         return True
 
-    def submission_busy(self, submission_id, dataset_version):
+    def submission_busy(self, submission_id, dataset_id):
         """Check if the submission has a related job in the queue or
         assigned to a worker.
 
@@ -882,11 +878,11 @@ class EvaluationService(Service):
             JobQueueEntry(
                 EvaluationService.JOB_TYPE_COMPILATION,
                 submission_id,
-                dataset_version),
+                dataset_id),
             JobQueueEntry(
                 EvaluationService.JOB_TYPE_EVALUATION,
                 submission_id,
-                dataset_version),
+                dataset_id),
         ]
         return any([job in self.queue or job in self.pool for job in jobs])
 
@@ -914,7 +910,7 @@ class EvaluationService(Service):
         """
         if job.job_type in (EvaluationService.JOB_TYPE_COMPILATION,
                       EvaluationService.JOB_TYPE_EVALUATION):
-            return self.submission_busy(job.submission_id, job.dataset_version)
+            return self.submission_busy(job.submission_id, job.dataset_id)
         elif job.job_type in (EvaluationService.JOB_TYPE_TEST_COMPILATION,
                         EvaluationService.JOB_TYPE_TEST_EVALUATION):
             return self.user_test_busy(job.submission_id)
@@ -925,7 +921,7 @@ class EvaluationService(Service):
         """Push a job in the job queue if the submission is not
         already in the queue or assigned to a worker.
 
-        job (JobQueueEntry): (job_type, submission_id, dataset_version) to
+        job (JobQueueEntry): (job_type, submission_id, dataset_id) to
                              push.
 
         return (bool): True if pushed, False if not.
@@ -956,7 +952,7 @@ class EvaluationService(Service):
         # replied with an error), but if the pool wants to disable the
         # worker, it's because it already assigned its job to someone
         # else, so we discard the data from the worker.
-        job_type, object_id, dataset_version, side_data, shard = plus
+        job_type, object_id, dataset_id, side_data, shard = plus
 
         # If worker was ignored, do nothing.
         if self.pool.release_worker(shard):
@@ -989,12 +985,12 @@ class EvaluationService(Service):
         # We get the submission from DB and update it.
         with SessionGen(commit=False) as session:
             if job_type == EvaluationService.JOB_TYPE_COMPILATION:
-                submission_result = SubmissionResult.get_from_submission_id(
-                    object_id, dataset_version, session, create=True)
+                submission_result = SubmissionResult.get_from_id_or_create(
+                    object_id, dataset_id, session)
                 if submission_result is None:
                     logger.error("[action_finished] Couldn't find "
                                  "submission %d(%r) in the database." %
-                                 (object_id, dataset_version))
+                                 (object_id, dataset_id))
                     return
 
                 submission_result.compilation_tries += 1
@@ -1014,12 +1010,12 @@ class EvaluationService(Service):
                 self.compilation_ended(submission_result)
 
             elif job_type == EvaluationService.JOB_TYPE_EVALUATION:
-                submission_result = SubmissionResult.get_from_submission_id(
-                    object_id, dataset_version, session, create=False)
+                submission_result = SubmissionResult.get_from_id_or_create(
+                    object_id, dataset_id, session)
                 if submission_result is None:
                     logger.error("[action_finished] Couldn't find "
                                  "submission %d(%r) in the database." %
-                                 (object_id, dataset_version))
+                                 (object_id, dataset_id))
                     return
 
                 submission_result.evaluation_tries += 1
@@ -1123,7 +1119,7 @@ class EvaluationService(Service):
                 JobQueueEntry(
                     EvaluationService.JOB_TYPE_EVALUATION,
                     submission.id,
-                    submission_result.dataset_version),
+                    submission_result.dataset_id),
                 EvaluationService.JOB_PRIORITY_MEDIUM,
                 submission.timestamp)
         # If instead submission failed compilation, we don't evaluate,
@@ -1135,7 +1131,7 @@ class EvaluationService(Service):
             submission_result.sa_session.commit()
             self.scoring_service.new_evaluation(
                 submission_id=submission.id,
-                dataset_version=submission_result.dataset_version)
+                dataset_id=submission_result.dataset_id)
         # If compilation failed for our fault, we requeue or not.
         elif submission_result.compilation_outcome is None:
             if submission_result.compilation_tries > \
@@ -1143,7 +1139,7 @@ class EvaluationService(Service):
                 logger.error("Maximum tries reached for the "
                              "compilation of submission %d(%d). I will "
                              "not try again." % (submission.id,
-                                submission_result.dataset_version))
+                                submission_result.dataset_id))
             else:
                 # Note: lower priority (MEDIUM instead of HIGH) for
                 # compilations that are probably failing again.
@@ -1151,7 +1147,7 @@ class EvaluationService(Service):
                     JobQueueEntry(
                         EvaluationService.JOB_TYPE_COMPILATION,
                         submission.id,
-                        submission_result.dataset_version),
+                        submission_result.dataset_id),
                     EvaluationService.JOB_PRIORITY_MEDIUM,
                     submission.timestamp)
         # Otherwise, error.
@@ -1175,14 +1171,14 @@ class EvaluationService(Service):
         if submission_result.evaluated():
             submission_result.sa_session.commit()
             self.scoring_service.new_evaluation(submission_id=submission.id,
-                dataset_version=submission_result.dataset_version)
+                dataset_id=submission_result.dataset_id)
         # Evaluation unsuccessful, we requeue (or not).
         elif submission_result.evaluation_tries > \
                 EvaluationService.MAX_EVALUATION_TRIES:
             logger.error("Maximum tries reached for the "
                          "evaluation of submission %d(%d). I will "
                          "not try again." % (
-                            submission.id, submission_result.dataset_version))
+                            submission.id, submission_result.dataset_id))
         else:
             # Note: lower priority (LOW instead of MEDIUM) for
             # evaluations that are probably failing again.
@@ -1190,7 +1186,7 @@ class EvaluationService(Service):
                 JobQueueEntry(
                     EvaluationService.JOB_TYPE_EVALUATION,
                     submission.id,
-                    submission_result.dataset_version),
+                    submission_result.dataset_id),
                 EvaluationService.JOB_PRIORITY_LOW,
                 submission.timestamp)
 
@@ -1276,16 +1272,16 @@ class EvaluationService(Service):
                              "%d in the database." % submission_id)
                 return
 
-            for dataset_version in get_autojudge_datasets(submission.task):
-                submission_result = SubmissionResult.get_from_submission_id(
-                    submission_id, dataset_version, session, create=True)
+            for dataset in get_autojudge_datasets(submission.task):
+                submission_result = SubmissionResult.get_from_id_or_create(
+                    submission_id, dataset.id, session)
 
                 if to_compile(submission_result):
                     self.push_in_queue(
                         JobQueueEntry(
                             EvaluationService.JOB_TYPE_COMPILATION,
                             submission_id,
-                            dataset_version),
+                            dataset.id),
                         EvaluationService.JOB_PRIORITY_HIGH,
                         submission.timestamp)
 
@@ -1320,15 +1316,16 @@ class EvaluationService(Service):
     def invalidate_submission(self,
                               submission_id=None,
                               user_id=None,
-                              task_id=None,
-                              dataset_version=None,
+                              dataset_id=None,
                               level="compilation"):
         """Request for invalidating some computed data.
 
         The data (compilations and evaluations, or evaluations only)
-        to be cleared are the one regarding 1) a submission or 2) all
-        submissions of a user or 3) all submissions of a task or 4)
-        all submission (if all parameters are None).
+        to be cleared are those specific to one of:
+            1) a submission (only submission_id and dataset_id given)
+         or 2) all submissions of a user for the active dataset (only user_id
+               given)
+         or 3) all submissions for a dataset (only dataset_id given)
 
         The data are cleared, the jobs involving the submissions
         currently enqueued are deleted, and the one already assigned
@@ -1337,8 +1334,7 @@ class EvaluationService(Service):
         submission_id (int): id of the submission to invalidate, or
                              None.
         user_id (int): id of the user we want to invalidate, or None.
-        task_id (int): id of the task we want to invalidate, or None.
-        dataset_version (int): dataset version of task to invalidate, or None.
+        dataset_id (int): id of the dataset we want to invalidate, or None.
         level (string): 'compilation' or 'evaluation'
 
         """
@@ -1348,12 +1344,21 @@ class EvaluationService(Service):
             logger.error(err_msg)
             raise ValueError(err_msg)
 
+        # If we are invalidating a dataset, get the task so we can find all the
+        # relevant submissions.
+        if submission_id is None and dataset_id is not None:
+            with SessionGen(commit=False) as session:
+                dataset = Dataset.get_from_id(dataset_id, session)
+                task_id = dataset.task_id
+        else:
+            task_id = None
+
         submission_ids = get_submissions(
             self.contest_id,
             submission_id, user_id, task_id)
         logger.info(
-            "Submissions to invalidate for %s (dataset_version: %r): %s." %
-                    (level, dataset_version, len(submission_ids)))
+            "Submissions to invalidate for %s (dataset_id: %r): %s." %
+                    (level, dataset_id, len(submission_ids)))
         if len(submission_ids) == 0:
             return
 
@@ -1362,20 +1367,20 @@ class EvaluationService(Service):
                     .options(joinedload(Submission.task))\
                     .filter(Submission.id.in_(submission_ids)).all()
             for submission in submissions:
-                if dataset_version is None:
-                    dv = submission.task.active_dataset_version
+                if dataset_id is None:
+                    this_dataset_id = submission.task.active_dataset_id
                 else:
-                    dv = dataset_version
+                    this_dataset_id = dataset_id
 
                 jobs = [
                     JobQueueEntry(
                         EvaluationService.JOB_TYPE_COMPILATION,
                         submission.id,
-                        dv),
+                        this_dataset_id),
                     JobQueueEntry(
                         EvaluationService.JOB_TYPE_EVALUATION,
                         submission.id,
-                        dv),
+                        this_dataset_id),
                     ]
                 for job in jobs:
                     try:
@@ -1395,15 +1400,15 @@ class EvaluationService(Service):
                     .options(joinedload(Submission.results))\
                     .filter(Submission.id.in_(submission_ids)).all()
             for submission in submissions:
-                if dataset_version is None:
-                    dv = submission.task.active_dataset_version
+                if dataset_id is None:
+                    this_dataset_id = submission.task.active_dataset_id
                 else:
-                    dv = dataset_version
+                    this_dataset_id = dataset_id
 
-                submission_result = submission.results.get(dv)
+                submission_result = submission.results.get(this_dataset_id)
                 if submission_result is None:
                     submission_result = SubmissionResult(
-                            submission, submission.task, dv)
+                            submission, submission.task, this_dataset_id)
                     session.add(submission_result)
 
                 if level == "compilation":
@@ -1413,7 +1418,7 @@ class EvaluationService(Service):
                             JobQueueEntry(
                                 EvaluationService.JOB_TYPE_COMPILATION,
                                 submission.id,
-                                dv),
+                                this_dataset_id),
                             EvaluationService.JOB_PRIORITY_HIGH,
                             submission.timestamp)
                 elif level == "evaluation":
@@ -1423,7 +1428,7 @@ class EvaluationService(Service):
                             JobQueueEntry(
                                 EvaluationService.JOB_TYPE_EVALUATION,
                                 submission.id,
-                                dv),
+                                this_dataset_id),
                             EvaluationService.JOB_PRIORITY_MEDIUM,
                             submission.timestamp)
 

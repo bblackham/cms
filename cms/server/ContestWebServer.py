@@ -1203,12 +1203,11 @@ class SubmissionStatusHandler(BaseHandler):
             raise tornado.web.HTTPError(404)
 
         sr = SubmissionResult.get_from_id(
-            (submission.id, submission.task_id,
-                submission.task.active_dataset_version),
+            (submission.id, submission.task.active_dataset_id),
             self.sql_session)
 
         score_type = get_score_type(submission=submission,
-            dataset_version=submission.task.active_dataset_version)
+            dataset_id=submission.task.active_dataset_id)
 
         # TODO: use some kind of constants to refer to the status.
         data = dict()
@@ -1266,12 +1265,11 @@ class SubmissionDetailsHandler(BaseHandler):
             raise tornado.web.HTTPError(404)
 
         sr = SubmissionResult.get_from_id(
-            (submission.id, submission.task_id,
-                submission.task.active_dataset_version),
+            (submission.id, submission.task.active_dataset_id),
             self.sql_session)
 
         score_type = get_score_type(submission=submission,
-            dataset_version=submission.task.active_dataset_version)
+            dataset_id=submission.task.active_dataset_id)
 
         details = None
         if sr is not None:

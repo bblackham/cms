@@ -33,12 +33,12 @@ setDefaultNotifyCheckboxes();
 <tr>
   <td>Current dataset:</td>
   <td><strong>{{ task.active_dataset.description }}</strong></td>
-  <td><a href="{{ url_root }}/task/{{ task.id }}/{{ task.active_dataset.version }}">[View results]</td>
+  <td><a href="{{ url_root }}/dataset/{{ task.active_dataset.id }}">[View results]</td>
 </tr>
 <tr>
   <td>New dataset:</td>
   <td><strong>{{ dataset.description }}</strong></td>
-  <td><a href="{{ url_root }}/task/{{ task.id }}/{{ dataset.version }}">[View results]</td>
+  <td><a href="{{ url_root }}/dataset/{{ dataset.id }}">[View results]</td>
 </tr>
 </table>
 
@@ -51,14 +51,14 @@ below, and wait for it to complete.
 </p>
 
 <p>
-{% set reevaluation_par_dataset_version = dataset.version %}
     Reevaluate all submissions using the dataset "{{ dataset.description }}":
-    {% set reevaluation_par_name = "task" %}
-    {% set reevaluation_par_value = task.id %}
+    {% set reevaluation_par_dataset_id = None %}
+    {% set reevaluation_par_name = "dataset" %}
+    {% set reevaluation_par_value = dataset.id %}
     {% include reevaluation_buttons.html %}
 </p>
 
-<form action="{{ url_root }}/activate_dataset/{{ task.id }}/{{ dataset.version}}" method="POST">
+<form action="{{ url_root }}/activate_dataset/{{ dataset.id }}" method="POST">
 {% if len(changes) == 0 %}
 <p>Good news! At present, switching to this dataset will have no effect on the
 scores. No notifications will be sent.</p>

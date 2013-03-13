@@ -9,9 +9,9 @@ function showTaskTypeOption(dv) {
 };
 
 {% for dataset in task.datasets.itervalues() %}
-showTaskTypeOption({{ dataset.version }});
-$("select[name=task_type_{{ dataset.version }}]").change(function() {
-    showTaskTypeOption({{ dataset.version }});
+showTaskTypeOption({{ dataset.id }});
+$("select[name=task_type_{{ dataset.id }}]").change(function() {
+    showTaskTypeOption({{ dataset.id }});
 });
 {% end %}
 
@@ -33,7 +33,7 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
   {% if len(submissions) == 0 %}
   <p>No submissions for this task yet.</p>
   {% else %}
-    <a href="{{ url_root }}/task/{{ task.id }}/{{ task.active_dataset_version }}">
+    <a href="{{ url_root }}/dataset/{{ task.active_dataset_id }}">
       {% if len(submissions) == 1 %}
       1 submission
       {% else %}
@@ -119,31 +119,31 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
 
 {% for _, dataset in sorted(task.datasets.items()) %}
 
-  <h3 id="title_dataset_{{ dataset.version }}" class="toggling_on">Dataset: {{ dataset.description }}{{ format_dataset_attrs(dataset) }}</h3>
-  <div id="dataset_{{ dataset.version }}" class="task_dataset">
+  <h3 id="title_dataset_{{ dataset.id }}" class="toggling_on">Dataset: {{ dataset.description }}{{ format_dataset_attrs(dataset) }}</h3>
+  <div id="dataset_{{ dataset.id }}" class="task_dataset">
 
     <p>
-      {% if task.active_dataset_version == dataset.version %}
+      {% if task.active_dataset_id == dataset.id %}
       [Make Live ...]
       {% else %}
-      <a href="{{ url_root }}/activate_dataset/{{ task.id }}/{{ dataset.version }}">[Make Live ...]</a>
+      <a href="{{ url_root }}/activate_dataset/{{ dataset.id }}">[Make Live ...]</a>
       {% end %}
-      <a href="{{ url_root }}/add_dataset/{{ task.id }}/{{ dataset.version }}">[Clone]</a>
-      <a href="{{ url_root }}/rename_dataset/{{ task.id }}/{{ dataset.version }}">[Rename]</a>
-      {% if task.active_dataset_version == dataset.version %}
+      <a href="{{ url_root }}/add_dataset/{{ task.id }}/{{ dataset.id }}">[Clone]</a>
+      <a href="{{ url_root }}/rename_dataset/{{ dataset.id }}">[Rename]</a>
+      {% if task.active_dataset_id == dataset.id %}
       [Delete]
       {% else %}
-      <a href="{{ url_root }}/delete_dataset/{{ task.id }}/{{ dataset.version }}">[Delete]</a>
+      <a href="{{ url_root }}/delete_dataset/{{ dataset.id }}">[Delete]</a>
       {% end %}
-      {% if task.active_dataset_version != dataset.version %}
-        <a href="{{ url_root }}/autojudge_dataset/{{ task.id }}/{{ dataset.version }}">[{% if dataset.autojudge %}Disable{% else %}Enable{% end %} background judging]</a>
+      {% if task.active_dataset_id != dataset.id %}
+        <a href="{{ url_root }}/autojudge_dataset/{{ dataset.id }}">[{% if dataset.autojudge %}Disable{% else %}Enable{% end %} background judging]</a>
       {% end %}
-      <a href="{{ url_root }}/task/{{ task.id }}/{{ dataset.version }}">[View results]</a>
+      <a href="{{ url_root }}/dataset/{{ dataset.id }}">[View results]</a>
     </p>
 
   <!-- Task type and score type settings -->
 
-    <h4 id="title_task_type_{{ dataset.version }}" class="toggling_on">Task and scoring parameters</h4>
+    <h4 id="title_task_type_{{ dataset.id }}" class="toggling_on">Task and scoring parameters</h4>
 
     {% if dataset.task_type not in [task_type.__name__ for task_type in task_type_list] %}
     <script type="text/javascript">
@@ -171,23 +171,23 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
     </script>
     {% end %}
 
-    <div id="task_type_{{ dataset.version }}" class="task_dataset_params">
+    <div id="task_type_{{ dataset.id }}" class="task_dataset_params">
       <table>
 
         <tr>
           <td>Time limit</td>
-          <td><input type="text" name="time_limit_{{ dataset.version }}" value="{{ dataset.time_limit if dataset.time_limit is not None else "" }}"/> second(s)</td>
+          <td><input type="text" name="time_limit_{{ dataset.id }}" value="{{ dataset.time_limit if dataset.time_limit is not None else "" }}"/> second(s)</td>
         </tr>
         <tr>
           <td>Memory limit</td>
-          <td><input type="text" name="memory_limit_{{ dataset.version }}" value="{{ dataset.memory_limit if dataset.memory_limit is not None else "" }}"/> MiB</td>
+          <td><input type="text" name="memory_limit_{{ dataset.id }}" value="{{ dataset.memory_limit if dataset.memory_limit is not None else "" }}"/> MiB</td>
         </tr>
 
         <tr>
           <td>Task type</td>
           <td>
 
-            <select name="task_type_{{ dataset.version }}">
+            <select name="task_type_{{ dataset.id }}">
               {% for task_type in task_type_list %}
               <option value="{{ task_type.__name__ }}" {% if dataset.task_type == task_type.__name__ %}selected{% end %}>{{ task_type.__name__ }}</option>
               {% end %}
@@ -195,14 +195,14 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
           {% set parameters = json.loads(dataset.task_type_parameters) if dataset.task_type_parameters != '' else None %}
 
           {% for task_type in task_type_list %}
-          <table class="TaskTypeOptions TaskTypeOptions_{{ dataset.version }} bordered" id="TaskType{{ task_type.__name__ }}Options_{{ dataset.version }}" style="display: none;">
+          <table class="TaskTypeOptions TaskTypeOptions_{{ dataset.id }} bordered" id="TaskType{{ task_type.__name__ }}Options_{{ dataset.id }}" style="display: none;">
             {% for i in range(len(task_type.ACCEPTED_PARAMETERS)) %}
               {% set param_def = task_type.ACCEPTED_PARAMETERS[i] %}
               {% set parameter_value = parameters[i] if dataset.task_type == task_type.__name__ and parameters is not None and i < len(parameters) else None %}
               <tr>
                   <td>{{ param_def.name }}</td>
                   <td>
-                      {% raw param_def.render( "TaskTypeOptions_%s_%s_" % (task_type.__name__, dataset.version), parameter_value) %}
+                      {% raw param_def.render( "TaskTypeOptions_%s_%s_" % (task_type.__name__, dataset.id), parameter_value) %}
                   </td>
               </tr>
             {% end %}
@@ -214,7 +214,7 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
         <tr>
           <td>Managers</td>
           <td>
-            <a href="{{ url_root }}/add_manager/{{ task.id }}/{{ dataset.version }}">Add a manager</a></br>
+            <a href="{{ url_root }}/add_manager/{{ task.id }}/{{ dataset.id }}">Add a manager</a></br>
             {% if len(dataset.managers) == 0 %}
               No managers.
             {% else %}
@@ -230,7 +230,7 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
         <tr>
           <td>Score Type</td>
           <td>
-            <select name="score_type_{{ dataset.version }}">
+            <select name="score_type_{{ dataset.id }}">
               {% for score_type in score_type_list %}
               <option value="{{ score_type.__name__}}" {% if dataset.score_type == score_type.__name__ %}selected{% end %}>{{ score_type.__name__ }}</option>
               {% end %}
@@ -239,7 +239,7 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
         </tr>
         <tr>
           <td>Score Parameters</td>
-          <td><textarea name="score_type_parameters_{{ dataset.version }}">{{ dataset.score_type_parameters }}</textarea></td>
+          <td><textarea name="score_type_parameters_{{ dataset.id }}">{{ dataset.score_type_parameters }}</textarea></td>
         </tr>
       </table>
       <div class="hr"></div>
@@ -247,9 +247,9 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
 
   <!-- Test cases for this dataset -->
 
-  <h4 id="title_testcases_{{ dataset.version }}" class="toggling_on">Test cases</h4>
-    <div id="testcases_{{ dataset.version }}" class="task_dataset_testcases">
-      <a href="{{ url_root }}/add_testcase/{{ task.id }}/{{ dataset.version }}">Add a testcase</a>
+  <h4 id="title_testcases_{{ dataset.id }}" class="toggling_on">Test cases</h4>
+    <div id="testcases_{{ dataset.id }}" class="task_dataset_testcases">
+      <a href="{{ url_root }}/add_testcase/{{ dataset.id }}">Add a testcase</a>
       <table class="bordered" style="text-align:center">
         <thead>
           <tr>
@@ -265,7 +265,7 @@ $("select[name=task_type_{{ dataset.version }}]").change(function() {
           <tr>
             <td style="font-weight:bold;">{{ testcase.num }}</td>
             <td style="font-weight:bold;">
-              <input type="checkbox" name="testcase_{{ dataset.version }}_{{ testcase.num }}_public" {% if testcase.public %}checked{% end %} />
+              <input type="checkbox" name="testcase_{{ dataset.id }}_{{ testcase.num }}_public" {% if testcase.public %}checked{% end %} />
             </td>
             <td>
               <a href="#" onclick="utils.show_file('input{{ testcase.num }}','{{ url_root }}/file/{{ testcase.input }}/input{{ testcase.num }}')">Show input</a>

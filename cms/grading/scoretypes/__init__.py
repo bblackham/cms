@@ -24,12 +24,12 @@ import simplejson as json
 from cms import logger, plugin_lookup
 
 
-def get_score_type(submission=None, task=None, dataset_version=None):
+def get_score_type(submission=None, task=None, dataset_id=None):
     """Given a task, instantiate the corresponding ScoreType class.
 
     submission (Submission): the submission that needs the task type.
     task (Task): the task we want to score.
-    dataset_version (int): the dataset version to use, or None for active.
+    dataset_id (int): the dataset id to use, or None for active.
 
     return (object): an instance of the correct ScoreType class.
 
@@ -42,9 +42,9 @@ def get_score_type(submission=None, task=None, dataset_version=None):
     if submission is not None:
         task = submission.task
 
-    if dataset_version is None:
-        dataset_version = task.active_dataset_version
-    dataset = task.datasets[dataset_version]
+    if dataset_id is None:
+        dataset_id = task.active_dataset_id
+    dataset = task.datasets[dataset_id]
 
     score_type_name = dataset.score_type
     try:
@@ -52,13 +52,13 @@ def get_score_type(submission=None, task=None, dataset_version=None):
     except json.decoder.JSONDecodeError as error:
         logger.error("Cannot decode score type parameters for task "
             "%d \"%s\", dataset %d \"%s\"\n%r." % (
-                task.id, task.name, dataset.version, dataset.description,
+                task.id, task.name, dataset.id, dataset.description,
                 error))
         return None
 
     public_testcases = dict(
         (testcase.num, testcase.public)
-        for testcase in task.datasets[dataset_version].testcases)
+        for testcase in task.datasets[dataset_id].testcases)
 
     cls = plugin_lookup(score_type_name,
                         "cms.grading.scoretypes", "scoretypes")
@@ -68,6 +68,6 @@ def get_score_type(submission=None, task=None, dataset_version=None):
     except Exception as error:
         logger.error("Cannot instantiate score type for task "
             "%d \"%s\", dataset %d \"%s\"\n%r." % (
-                task.id, task.name, dataset.version, dataset.description,
+                task.id, task.name, dataset.id, dataset.description,
                 error))
         return None

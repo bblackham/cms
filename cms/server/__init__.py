@@ -395,7 +395,7 @@ def format_dataset_attrs(dataset):
 
     """
     dataset_attrs = []
-    active = dataset.version == dataset.task.active_dataset_version
+    active = dataset.id == dataset.task.active_dataset_id
     judging = dataset.autojudge
     if active:
         dataset_attrs.append("Live")

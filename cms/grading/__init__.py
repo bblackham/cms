@@ -605,8 +605,8 @@ def compute_changes_for_dataset(old_dataset, new_dataset,
                 .options(joinedload(Submission.results)).all()
     ret = []
     for s in submissions:
-        old = s.results.get(old_dataset.version)
-        new = s.results.get(new_dataset.version)
+        old = s.results.get(old_dataset.id)
+        new = s.results.get(new_dataset.id)
 
         diff1, pair1 = compare(
             old.score if old is not None else None,
@@ -675,7 +675,7 @@ def task_score(user, task):
     # otherwise we use 0.0 (and mark that the score is partial
     # when the last submission could be scored).
     s = submissions[-1]
-    last_sr = s.results[task.active_dataset_version]
+    last_sr = s.results[task.active_dataset_id]
 
     if last_sr is not None and last_sr.scored():
         last_score = last_sr.score
@@ -683,7 +683,7 @@ def task_score(user, task):
         partial = True
 
     for submission in submissions:
-        sr = submission.results[task.active_dataset_version]
+        sr = submission.results[task.active_dataset_id]
         if submission.tokened():
             if sr is not None and sr.scored():
                 max_tokened_score = max(max_tokened_score, sr.score)

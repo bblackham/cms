@@ -74,15 +74,15 @@ def get_autojudge_datasets(task):
 
     task (Task): the task to query.
 
-    returns (list): list of dataset versions.
+    returns (list): list of dataset objects.
     """
 
     # The active dataset is always automatically judged.
-    autojudge = [task.active_dataset_version]
+    autojudge = [task.active_dataset]
 
     for dataset in task.datasets.itervalues():
-        if dataset.version != task.active_dataset_version and \
+        if dataset.id != task.active_dataset_id and \
                 dataset.autojudge:
-            autojudge.append(dataset.version)
+            autojudge.append(dataset)
 
     return autojudge

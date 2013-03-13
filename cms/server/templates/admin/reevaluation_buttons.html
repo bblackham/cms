@@ -1,13 +1,10 @@
 {% set url = "%s/%s/%s" % (url_root, reevaluation_par_name, reevaluation_par_value) %}
-{% if reevaluation_par_dataset_version is not None %}
-{% set url = url + "/%d" % reevaluation_par_dataset_version %}
-{% end %}
 <button onclick="cmsrpc.request(
                  'EvaluationService', 0,
                  'invalidate_submission',
                  {'{{ reevaluation_par_name }}_id': {{ reevaluation_par_value }},
-                 {% if reevaluation_par_dataset_version is not None %}
-                  'dataset_version': {{ reevaluation_par_dataset_version }},
+                 {% if reevaluation_par_dataset_id is not None %}
+                  'dataset_id': {{ reevaluation_par_dataset_id }},
                  {% end %}
                   'level': 'compilation'},
                  function(response) { utils.redirect_if_ok('{{ url }}', response); }
@@ -17,8 +14,8 @@
                  'EvaluationService', 0,
                  'invalidate_submission',
                  {'{{ reevaluation_par_name }}_id': {{ reevaluation_par_value }},
-                 {% if reevaluation_par_dataset_version is not None %}
-                  'dataset_version': {{ reevaluation_par_dataset_version }},
+                 {% if reevaluation_par_dataset_id is not None %}
+                  'dataset_id': {{ reevaluation_par_dataset_id }},
                  {% end %}
                   'level': 'evaluation'},
                  function(response) { utils.redirect_if_ok('{{ url }}', response); }
@@ -28,8 +25,8 @@
                  'ScoringService', 0,
                  'invalidate_submission',
                  {'{{ reevaluation_par_name }}_id': {{ reevaluation_par_value }},
-                 {% if reevaluation_par_dataset_version is not None %}
-                  'dataset_version': {{ reevaluation_par_dataset_version }},
+                 {% if reevaluation_par_dataset_id is not None %}
+                  'dataset_id': {{ reevaluation_par_dataset_id }},
                  {% end %}
                  },
                  function(response) { utils.redirect_if_ok('{{ url }}', response); }

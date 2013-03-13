@@ -52,14 +52,14 @@ function update_additional_answer(element, invoker)
       </tr>
     </thead>
     <tbody>
-      {% set reevaluation_par_dataset_version = None %}
       {% set reevaluation_par_name = "submission" %}
       {% for s in sorted(submissions, key=lambda s: s.timestamp, reverse=True) %}
-        {% set sr = s.results.get(s.task.active_dataset_version) %}
+        {% set dataset_id = s.task.active_dataset_id %}
+        {% set sr = s.results.get(dataset_id) %}
         {% if s.task.name in score_types %}
           {% set score_type = score_types[s.task.name] %}
         {% else %}
-          {% set score_type = get_score_type(submission=s, dataset_version=sr.dataset_version) %}
+          {% set score_type = get_score_type(submission=s, dataset_id=dataset_id) %}
           {% set score_types[s.task.name] = score_type %}
         {% end %}
       <tr>
@@ -136,6 +136,7 @@ function update_additional_answer(element, invoker)
           {% end %}
         </td>
         <td>
+          {% set reevaluation_par_dataset_id = dataset_id %}
           {% set reevaluation_par_value = s.id %}
           {% include reevaluation_buttons.html %}
         </td>
@@ -145,7 +146,7 @@ function update_additional_answer(element, invoker)
   </table>
   <p>
     Reevaluate all {{ len(submissions) }} submissions for this user:
-    {% set reevaluation_par_dataset_version = None %}
+    {% set reevaluation_par_dataset_id = None %}
     {% set reevaluation_par_name = "user" %}
     {% set reevaluation_par_value = selected_user.id %}
     {% include reevaluation_buttons.html %}

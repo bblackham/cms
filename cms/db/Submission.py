@@ -312,28 +312,22 @@ class SubmissionResult(Base):
         return cls(**data)
 
     @classmethod
-    def get_from_submission_id(cls, submission_id, dataset_id, session,
-                create=False):
-        # Look up the submission to get the task.
-        submission = Submission.get_from_id(submission_id, session)
-        if submission is None:
-            return None
-
+    def get_from_id_or_create(cls, submission_id, dataset_id, session):
         # Find an existing submission result.
         submission_result = SubmissionResult.get_from_id(
-            (submission_id, dataset_id), session)
+                (submission_id, dataset_id), session)
 
-        # Create one if it doesn't exist, and we've been asked to.
+        # Create one if it doesn't exist.
         if submission_result is None:
-            if create:
-                submission_result = SubmissionResult(
-                    submission=submission, task=submission.task)
-                # When instantiating, we would need to provide a dataset
-                # object, not dataset_id. Instead, instantiate without,
-                # and set dataset_id afterwards.
-                submission_result.dataset_id = dataset_id
+            submission = Submission.get_from_id(submission_id, session)
+            dataset = Dataset.get_from_id(dataset_id, session)
+            if submission is None or dataset is None:
+                return None
 
-                session.add(submission_result)
+            submission_result = SubmissionResult(
+                    submission=submission, dataset=dataset)
+
+            session.add(submission_result)
 
         return submission_result
 

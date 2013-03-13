@@ -2,16 +2,14 @@
 
 {% block core %}
 {% from cms.grading.scoretypes import get_score_type %}
-{% set st = get_score_type(submission=s, dataset_version=shown_dataset.version) %}
-{% set sr = s.results.get(shown_dataset.version) %}
+{% set st = get_score_type(submission=s, dataset_id=shown_dataset.id) %}
+{% set sr = s.results.get(shown_dataset.id) %}
 <div class="core_title">
   <h1>Submission {{ s.id }} (Task: <a href="{{ url_root }}/task/{{ s.task.id }}">{{ s.task.name }}</a>)</h1>
 </div>
 
 {% set dataset_selector_par_url = "%s/submission/%s" % (url_root, s.id) %}
 {% include dataset_selector.html %}
-
-{% set reevaluation_par_dataset_version = shown_dataset.version %}
 
 <h2 id="title_details" class="toggling_on">Submission details</h2>
 <div id="details">
@@ -104,6 +102,7 @@
         <td>
           {% set reevaluation_par_name = "submission" %}
           {% set reevaluation_par_value = s.id %}
+          {% set reevaluation_par_dataset_id = shown_dataset.id %}
           {% include reevaluation_buttons.html %}
         </td>
       </tr>

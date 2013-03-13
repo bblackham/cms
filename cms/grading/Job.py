@@ -102,8 +102,8 @@ class CompilationJob(Job):
         self.plus = plus
 
     @staticmethod
-    def from_submission(submission, dataset_version):
-        dataset = submission.task.datasets[dataset_version]
+    def from_submission(submission, dataset_id):
+        dataset = submission.task.datasets[dataset_id]
 
         job = CompilationJob()
 
@@ -231,8 +231,8 @@ class EvaluationJob(Job):
         self.get_output = get_output
 
     @staticmethod
-    def from_submission(submission, dataset_version):
-        dataset = submission.task.datasets[dataset_version]
+    def from_submission(submission, dataset_id):
+        dataset = submission.task.datasets[dataset_id]
 
         job = EvaluationJob()
 
@@ -241,9 +241,9 @@ class EvaluationJob(Job):
         job.task_type_parameters = json.loads(dataset.task_type_parameters)
 
         # This should have been created by now.
-        assert dataset_version in submission.results
+        assert dataset_id in submission.results
 
-        submission_results = submission.results[dataset_version]
+        submission_results = submission.results[dataset_id]
 
         # EvaluationJob; dict() is required to detach the dictionary
         # that gets added to the Job from the control of SQLAlchemy

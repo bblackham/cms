@@ -11,15 +11,15 @@
   Click on one of the following items to view the results under a
   different dataset.</p>
   <table>
-  {% for dataset in sorted(datasets, key=lambda d: d.version) %}
+  {% for dataset in sorted(datasets, key=lambda d: d.id) %}
     <tr><td>
-    {% if dataset.version == shown_dataset.version %}
+    {% if dataset.id == shown_dataset.id %}
       <strong>
     {% else %}
-      <a href="{{ dataset_selector_par_url }}/{{ dataset.version }}">
+      <a href="{{ dataset_selector_par_url }}/{{ dataset.id }}">
     {% end %}
     {{ dataset.description }}
-    {% if dataset.version == shown_dataset.version %}
+    {% if dataset.id == shown_dataset.id %}
       </strong>
     {% else %}
       </a>

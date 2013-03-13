@@ -79,13 +79,13 @@ class ScoreType:
         """
         pass
 
-    def add_submission(self, submission_id, dataset_version, timestamp,
+    def add_submission(self, submission_id, dataset_id, timestamp,
                        username, evaluated, evaluations, tokened):
         """To call in order to add a submission to the computation of
         all scores.
 
         submission_id (int): id of the new submission.
-        dataset_version (int): the dataset under which this is scored.
+        dataset_id (int): the dataset under which this is scored.
         timestamp (int): time of submission.
         username (string): username of the owner of the submission.
         evaluated (bool): if the submission compiled correctly.
