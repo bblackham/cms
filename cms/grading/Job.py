@@ -241,7 +241,7 @@ class EvaluationJob(Job):
         job.task_type_parameters = json.loads(dataset.task_type_parameters)
 
         # This should have been created by now.
-        assert submission.results.get(dataset_version) is not None
+        assert dataset_version in submission.results
 
         submission_results = submission.results[dataset_version]
 
