@@ -346,28 +346,6 @@ class Dataset(Base):
     # managers (dict of Manager objects indexed by filename)
     # testcases (list of Testcase objects)
 
-    def __init__(self, task=None,
-        time_limit=None, memory_limit=None,
-        task_type=None, task_type_parameters=None,
-        score_type=None, score_type_parameters=None, managers={}, testcases=[],
-        version=None, description='', autojudge=False):
-
-        for filename, manager in managers.iteritems():
-            manager.filename = filename
-
-        self.task = task
-        self.time_limit = time_limit
-        self.memory_limit = memory_limit
-        self.task_type = task_type
-        self.task_type_parameters = task_type_parameters
-        self.score_type = score_type
-        self.score_type_parameters = score_type_parameters
-        self.managers = managers
-        self.testcases = testcases
-        self.version = version
-        self.description = description
-        self.autojudge = autojudge
-
     def export_to_dict(self):
         """Return object data as a dictionary.
 
