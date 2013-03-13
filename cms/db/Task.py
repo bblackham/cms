@@ -50,12 +50,6 @@ class Task(Base):
         UniqueConstraint('contest_id', 'name',
                          name='cst_task_contest_id_name'),
         CheckConstraint("token_initial <= token_max"),
-        ForeignKeyConstraint(
-            ('id', 'active_dataset_version'),
-            ('datasets.task_id', 'datasets.version'),
-            onupdate="SET DEFAULT", ondelete="SET DEFAULT",
-            use_alter=True,
-            name='fk_dataset_version'),
         )
 
     # Auto increment primary key.
@@ -164,25 +158,28 @@ class Task(Base):
         default=0)
 
     # Active data set currently being used for scoring.
-    active_dataset_version = Column(
+    active_dataset_id = Column(
         Integer,
+        ForeignKey('datasets.id',
+                   onupdate="SET DEFAULT", ondelete="SET DEFAULT",
+                   use_alter=True,
+                   name='fk_active_dataset_id'),
         nullable=True)
 
     # Provide easy access to the active dataset object.
     active_dataset = relationship(
         'Dataset',
-        primaryjoin='and_(Task.id==Dataset.task_id, '
-            'Task.active_dataset_version==Dataset.version)',
+        primaryjoin='and_(Task.active_dataset_id==Dataset.id)',
         post_update=True,
         uselist=False,
         single_parent=True,
         cascade='all, delete-orphan',
-    )
+        )
 
     # Follows the description of the fields automatically added by
     # SQLAlchemy.
     # submission_format (list of SubmissionFormatElement objects)
-    # datasets (dict of Dataset objects indexed by version)
+    # datasets (dict of Dataset objects indexed by id)
     # attachments (dict of Attachment objects indexed by filename)
     # statements (dict of Statement objects indexed by language code)
     # submissions (list of Submission objects)
@@ -210,7 +207,7 @@ class Task(Base):
                 'submission_format':    [element.export_to_dict()
                                          for element
                                          in self.submission_format],
-                'active_dataset': self.active_dataset_version,
+                'active_dataset': self.active_dataset_id,
                 'datasets': [dataset.export_to_dict()
                              for _, dataset in sorted(self.datasets.items())],
                 'token_initial':        self.token_initial,
@@ -245,7 +242,7 @@ class Task(Base):
             sfe_data) for sfe_data in data['submission_format']]
         data['datasets'] = [Dataset.import_from_dict(dataset_data)
                             for dataset_data in data['datasets']]
-        data['datasets'] = dict([(_d.version, _d) for _d in data['datasets']])
+        data['datasets'] = dict([(_d.id, _d) for _d in data['datasets']])
         if data['active_dataset'] is not None:
             data['active_dataset'] = data['datasets'][data['active_dataset']]
         data['statements'] = [Statement.import_from_dict(statement_data)
@@ -275,26 +272,32 @@ class Dataset(Base):
     """
     __tablename__ = 'datasets'
     __table_args__ = (
-        UniqueConstraint('task_id', 'version',
-                         name='cst_datasets_task_id_version'),
-        UniqueConstraint('task_id', 'description',
+        UniqueConstraint('id', 'task_id', 'description',
                          name='cst_datasets_task_id_description'),
         )
 
-    # Task owning the testcase.
+    # Auto increment primary key.
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True)
+
+    # Task id and object owning the testcase.
     task_id = Column(
         Integer,
         ForeignKey(Task.id,
             onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
-        primary_key=True,
         autoincrement=False)
 
-    version = Column(
-        Integer,
-        nullable=False,
-        primary_key=True,
-        autoincrement=True)
+    task = relationship(
+        Task,
+        primaryjoin='Task.id==Dataset.task_id',
+        foreign_keys=task_id,
+        backref=backref('datasets',
+                        collection_class=smart_mapped_collection('id'),
+                        cascade="all, delete-orphan",
+                        passive_deletes=True))
 
     description = Column(
         String)
@@ -302,16 +305,6 @@ class Dataset(Base):
     autojudge = Column(Boolean,
         nullable=False,
         default=False)
-
-    # Task object owning the testcase.
-    task = relationship(
-        Task,
-        primaryjoin='Task.id==Dataset.task_id',
-        foreign_keys=task_id,
-        backref=backref('datasets',
-                        collection_class=smart_mapped_collection('version'),
-                        cascade="all, delete-orphan",
-                        passive_deletes=True))
 
     # Time and memory limits for every testcase.
     time_limit = Column(
@@ -350,8 +343,7 @@ class Dataset(Base):
         """Return object data as a dictionary.
 
         """
-        return {'version': self.version,
-                'description': self.description,
+        return {'description': self.description,
                 'testcases': [testcase.export_to_dict()
                               for testcase in self.testcases],
                 'autojudge': self.autojudge,
@@ -386,12 +378,8 @@ class Testcase(Base):
     """
     __tablename__ = 'task_testcases'
     __table_args__ = (
-        UniqueConstraint('task_id', 'dataset_version', 'num',
-                         name='cst_task_testcases_task_id_num'),
-        ForeignKeyConstraint(
-            ('task_id', 'dataset_version'),
-            (Dataset.task_id, Dataset.version),
-            onupdate="CASCADE", ondelete="CASCADE"),
+        UniqueConstraint('dataset_id', 'num',
+                         name='cst_task_testcases_dataset_id_num'),
         )
 
     # Auto increment primary key.
@@ -419,15 +407,11 @@ class Testcase(Base):
         String,
         nullable=False)
 
-    # Task and dataset owning this testcase.
-    task_id = Column(
+    # Dataset owning this testcase.
+    dataset_id = Column(
         Integer,
-        ForeignKey(Task.id,
+        ForeignKey(Dataset.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
-        nullable=False,
-        index=True)
-    dataset_version = Column(
-        Integer,
         nullable=False,
         index=True)
 
@@ -525,12 +509,8 @@ class Manager(Base):
     """
     __tablename__ = 'managers'
     __table_args__ = (
-        UniqueConstraint('task_id', 'dataset_version', 'filename',
-                         name='cst_managers_task_id_dataset_version_filename'),
-        ForeignKeyConstraint(
-            ('task_id', 'dataset_version'),
-            (Dataset.task_id, Dataset.version),
-            onupdate="CASCADE", ondelete="CASCADE"),
+        UniqueConstraint('dataset_id', 'filename',
+                         name='cst_managers_dataset_id_filename'),
         )
 
     # Auto increment primary key.
@@ -546,19 +526,12 @@ class Manager(Base):
         String,
         nullable=False)
 
-    # Task of the object owning the manager.
-    task_id = Column(
+    # Dataset that this evaluation belongs to.
+    dataset_id = Column(
         Integer,
-        ForeignKey(Task.id,
+        ForeignKey(Dataset.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
-        index=True)
-    task = relationship(Task)
-
-    # Dataset that this evaluation belongs to.
-    dataset_version = Column(
-        Integer,
-        nullable=True,
         index=True)
     dataset = relationship(
         Dataset,

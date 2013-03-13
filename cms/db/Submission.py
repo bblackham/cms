@@ -91,7 +91,7 @@ class Submission(Base):
     # SQLAlchemy.
     # files (dict of File objects indexed by filename)
     # token (Token object or None)
-    # results (dict of SubmissionResult indexed by dataset_version)
+    # results (dict of SubmissionResult indexed by dataset_id)
 
     LANGUAGES = ["c", "cpp", "pas"]
     LANGUAGES_MAP = {".c": "c",
@@ -134,7 +134,7 @@ class Submission(Base):
         data['timestamp'] = make_datetime(data['timestamp'])
         data['results'] = [SubmissionResult.import_from_dict(_r, data['task'])
                            for _r in data['results']]
-        data['results'] = dict([(_r.dataset_version, _r)
+        data['results'] = dict([(_r.dataset_id, _r)
                                 for _r in data['results']])
         return cls(**data)
 
@@ -162,15 +162,11 @@ class SubmissionResult(Base):
     """
     __tablename__ = 'submission_results'
     __table_args__ = (
-        UniqueConstraint('submission_id', 'task_id', 'dataset_version',
-                         name='cst_submission_results_id_version'),
-        ForeignKeyConstraint(
-            ('task_id', 'dataset_version'),
-            (Dataset.task_id, Dataset.version),
-            onupdate="CASCADE", ondelete="CASCADE"),
+        UniqueConstraint('submission_id', 'dataset_id',
+                         name='cst_submission_results_submission_id_dataset_id'),
         )
 
-    # Primary key is submission_id, task_id, dataset_version.
+    # Primary key is submission_id, dataset_id.
     # Yes, task_id is redundant, as we can get it from the
     # submission, but we need it in order to be a sane foreign key
     # into datasets.
@@ -183,15 +179,10 @@ class SubmissionResult(Base):
             onupdate="CASCADE", ondelete="CASCADE"),
         primary_key=True)
 
-    task_id = Column(
+    dataset_id = Column(
         Integer,
-        ForeignKey(Task.id,
+        ForeignKey(Dataset.id,
             onupdate="CASCADE", ondelete="CASCADE"),
-        primary_key=True)
-    task = relationship(Task)
-
-    dataset_version = Column(
-        Integer,
         primary_key=True)
     dataset = relationship(
         Dataset)
@@ -200,7 +191,7 @@ class SubmissionResult(Base):
         Submission,
         backref=backref(
             "results",
-            collection_class=smart_mapped_collection('dataset_version'),
+            collection_class=smart_mapped_collection('dataset_id'),
             cascade="all, delete-orphan",
             passive_deletes=True))
 
@@ -285,7 +276,7 @@ class SubmissionResult(Base):
 
         """
         res = {
-            'dataset_version': self.dataset.version,
+            'dataset_id': self.dataset.id,
             'compilation_outcome': self.compilation_outcome,
             'compilation_tries': self.compilation_tries,
             'compilation_text': self.compilation_text,
@@ -318,16 +309,10 @@ class SubmissionResult(Base):
                                     for executable in data['executables']])
         data['evaluations'] = [Evaluation.import_from_dict(eval_data)
                                for eval_data in data['evaluations']]
-        # When instantiating, we would need to provide a dataset object, not
-        # dataset_version. Instead, instantiate without, and set
-        # dataset_version afterwards.
-        dataset_version = data.pop('dataset_version')
-        o = cls(**data)
-        o.dataset_version = dataset_version
-        return o
+        return cls(**data)
 
     @classmethod
-    def get_from_submission_id(cls, submission_id, dataset_version, session,
+    def get_from_submission_id(cls, submission_id, dataset_id, session,
                 create=False):
         # Look up the submission to get the task.
         submission = Submission.get_from_id(submission_id, session)
@@ -336,7 +321,7 @@ class SubmissionResult(Base):
 
         # Find an existing submission result.
         submission_result = SubmissionResult.get_from_id(
-            (submission_id, submission.task_id, dataset_version), session)
+            (submission_id, dataset_id), session)
 
         # Create one if it doesn't exist, and we've been asked to.
         if submission_result is None:
@@ -344,9 +329,9 @@ class SubmissionResult(Base):
                 submission_result = SubmissionResult(
                     submission=submission, task=submission.task)
                 # When instantiating, we would need to provide a dataset
-                # object, not dataset_version. Instead, instantiate without,
-                # and set dataset_version afterwards.
-                submission_result.dataset_version = dataset_version
+                # object, not dataset_id. Instead, instantiate without,
+                # and set dataset_id afterwards.
+                submission_result.dataset_id = dataset_id
 
                 session.add(submission_result)
 
@@ -518,15 +503,10 @@ class Executable(Base):
     __tablename__ = 'executables'
     __table_args__ = (
         ForeignKeyConstraint(
-            ('submission_id', 'task_id', 'dataset_version'),
-            (SubmissionResult.submission_id, SubmissionResult.task_id,
-                SubmissionResult.dataset_version),
+            ('submission_id', 'dataset_id'),
+            (SubmissionResult.submission_id, SubmissionResult.dataset_id),
             onupdate="CASCADE", ondelete="CASCADE"),
-        ForeignKeyConstraint(
-            ('task_id', 'dataset_version'),
-            (Dataset.task_id, Dataset.version),
-            onupdate="CASCADE", ondelete="CASCADE"),
-        UniqueConstraint('submission_id', 'dataset_version', 'filename',
+        UniqueConstraint('submission_id', 'dataset_id', 'filename',
                          name='cst_executables_submission_id_filename'),
         )
 
@@ -554,24 +534,19 @@ class Executable(Base):
     submission = relationship(
         Submission,
         backref=backref("executables",
-                        collection_class=smart_mapped_collection('dataset_version'),
+                        collection_class=smart_mapped_collection('dataset_id'),
                         cascade="all, delete-orphan",
                         passive_deletes=True))
 
-    # Task of the object (needed for foreign key relation to Datasets).
-    task_id = Column(
+    # Dataset id and object that this executable belongs to.
+    dataset_id = Column(
         Integer,
-        ForeignKey(Task.id,
+        ForeignKey(Dataset.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
-    task = relationship(Task)
-
-    # Dataset that this evaluation belongs to.
-    dataset_version = Column(
-        Integer,
-        nullable=True,
-        index=True)
+    dataset = relationship(
+        Dataset)
 
     # Submission result owning this executable.
     submission_result = relationship(
@@ -600,15 +575,10 @@ class Evaluation(Base):
     __tablename__ = 'evaluations'
     __table_args__ = (
         ForeignKeyConstraint(
-            ('submission_id', 'task_id', 'dataset_version'),
-            (SubmissionResult.submission_id, SubmissionResult.task_id,
-                SubmissionResult.dataset_version),
+            ('submission_id', 'dataset_id'),
+            (SubmissionResult.submission_id, SubmissionResult.dataset_id),
             onupdate="CASCADE", ondelete="CASCADE"),
-        ForeignKeyConstraint(
-            ('task_id', 'dataset_version'),
-            (Dataset.task_id, Dataset.version),
-            onupdate="CASCADE", ondelete="CASCADE"),
-        UniqueConstraint('submission_id', 'dataset_version', 'num',
+        UniqueConstraint('submission_id', 'dataset_id', 'num',
                          name='cst_evaluations_submission_id_num'),
         )
 
@@ -630,20 +600,15 @@ class Evaluation(Base):
         nullable=False,
         index=True)
 
-    # Task of the object (needed for foreign key relation to Datasets).
-    task_id = Column(
+    # Dataset id and object that this evaluation belongs to.
+    dataset_id = Column(
         Integer,
-        ForeignKey(Task.id,
+        ForeignKey(Dataset.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
-    task = relationship(Task)
-
-    # Dataset that this evaluation belongs to.
-    dataset_version = Column(
-        Integer,
-        nullable=True,
-        index=True)
+    task = relationship(
+        Dataset)
 
     # Submission result owning this evaluation.
     submission_result = relationship(
