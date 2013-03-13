@@ -392,7 +392,7 @@ class ScoringService(Service):
             contest = session.query(Contest).\
                       filter_by(id=self.contest_id).first()
             for task in contest.tasks:
-                for dataset in task.datasets.itervalues():
+                for dataset in task.datasets:
                     try:
                         self.scorers[dataset.id] = \
                             get_score_type(task=task,

@@ -19,7 +19,7 @@
 
 import simplejson as json
 
-from cms.db.SQLAlchemyAll import File, Manager, Executable, Testcase
+from cms.db.SQLAlchemyAll import File, Manager, Executable, Dataset, Testcase
 
 
 class Job:
@@ -103,7 +103,8 @@ class CompilationJob(Job):
 
     @staticmethod
     def from_submission(submission, dataset_id):
-        dataset = submission.task.datasets[dataset_id]
+        with SessionGen(commit=False) as session:
+            dataset = Dataset.get_from_id(dataset_id, session)
 
         job = CompilationJob()
 
@@ -232,7 +233,8 @@ class EvaluationJob(Job):
 
     @staticmethod
     def from_submission(submission, dataset_id):
-        dataset = submission.task.datasets[dataset_id]
+        with SessionGen(commit=False) as session:
+            dataset = Dataset.get_from_id(dataset_id, session)
 
         job = EvaluationJob()
 

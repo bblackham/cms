@@ -8,7 +8,7 @@ function showTaskTypeOption(dv) {
     $("#TaskType" + selector.options[selector.selectedIndex].value + "Options_" + dv).show("fast")
 };
 
-{% for dataset in task.datasets.itervalues() %}
+{% for dataset in task.datasets %}
 showTaskTypeOption({{ dataset.id }});
 $("select[name=task_type_{{ dataset.id }}]").change(function() {
     showTaskTypeOption({{ dataset.id }});
@@ -117,7 +117,7 @@ $("select[name=task_type_{{ dataset.id }}]").change(function() {
     <a href="{{ url_root }}/add_dataset/{{ task.id }}/-">Create a new dataset</a><br/>
     </p>
 
-{% for _, dataset in sorted(task.datasets.items()) %}
+{% for dataset in sorted(task.datasets) %}
 
   <h3 id="title_dataset_{{ dataset.id }}" class="toggling_on">Dataset: {{ dataset.description }}{{ format_dataset_attrs(dataset) }}</h3>
   <div id="dataset_{{ dataset.id }}" class="task_dataset">

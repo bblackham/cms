@@ -955,7 +955,7 @@ class AddDatasetHandler(BaseHandler):
         description = self.get_argument("description", "")
 
         # Ensure description is unique.
-        for _, d in task.datasets.iteritems():
+        for d in task.datasets:
             if d.description == description:
                 self.application.service.add_notification(
                     make_datetime(),
@@ -1046,7 +1046,7 @@ class RenameDatasetHandler(BaseHandler):
 
         # Ensure description is unique.
         task = dataset.task
-        for _, d in task.datasets.iteritems():
+        for d in task.datasets:
             if d.id != dataset_id and d.description == description:
                 self.application.service.add_notification(
                     make_datetime(),
@@ -1468,7 +1468,7 @@ class TaskHandler(BaseHandler):
                     logger.info(repr(error))
                     raise ValueError("Submission format not recognized.")
 
-            for dataset in task.datasets.itervalues():
+            for dataset in task.datasets:
                 dataset.time_limit = sanity_check_time_limit(
                     self.get_argument("time_limit_%d" % dataset.id,
                         str(dataset.time_limit)

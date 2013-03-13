@@ -86,7 +86,7 @@
                   {% for ev in sr.evaluations %}
                   <tr>
                     <td>{{ ev.outcome }}</td>
-                    {% if s.token is not None or s.task.datasets[shown_dataset.id].testcases[int(ev.num)].public %}
+                    {% if s.token is not None or shown_dataset.testcases[int(ev.num)].public %}
                     <td style="align: center;">&bullet;</td>
                     {% else %}
                     <td></td>

@@ -209,7 +209,7 @@ class Task(Base):
                                          in self.submission_format],
                 'active_dataset': self.active_dataset_id,
                 'datasets': [dataset.export_to_dict()
-                             for _, dataset in sorted(self.datasets.items())],
+                             for dataset in self.datasets],
                 'token_initial':        self.token_initial,
                 'token_max':            self.token_max,
                 'token_total':          self.token_total,
@@ -295,7 +295,7 @@ class Dataset(Base):
         primaryjoin='Task.id==Dataset.task_id',
         foreign_keys=task_id,
         backref=backref('datasets',
-                        collection_class=smart_mapped_collection('id'),
+                        collection_class=list,
                         cascade="all, delete-orphan",
                         passive_deletes=True))
 

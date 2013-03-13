@@ -80,7 +80,7 @@ def get_autojudge_datasets(task):
     # The active dataset is always automatically judged.
     autojudge = [task.active_dataset]
 
-    for dataset in task.datasets.itervalues():
+    for dataset in task.datasets:
         if dataset.id != task.active_dataset_id and \
                 dataset.autojudge:
             autojudge.append(dataset)
