@@ -102,9 +102,7 @@ class CompilationJob(Job):
         self.plus = plus
 
     @staticmethod
-    def from_submission(submission, dataset_version=None):
-        if dataset_version is None:
-            dataset_version = submission.task.active_dataset_version
+    def from_submission(submission, dataset_version):
         dataset = submission.task.datasets[dataset_version]
 
         job = CompilationJob()
@@ -233,9 +231,7 @@ class EvaluationJob(Job):
         self.get_output = get_output
 
     @staticmethod
-    def from_submission(submission, dataset_version=None):
-        if dataset_version is None:
-            dataset_version = submission.task.active_dataset_version
+    def from_submission(submission, dataset_version):
         dataset = submission.task.datasets[dataset_version]
 
         job = EvaluationJob()
