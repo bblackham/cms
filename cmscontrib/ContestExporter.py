@@ -225,7 +225,7 @@ class ContestExporter:
 
         data = {"_class": cls.__name__}
 
-        for prp in cls._obj_props:
+        for prp in cls._col_props:
             col = prp.columns[0]
             col_type = type(col.type)
 
@@ -247,14 +247,16 @@ class ContestExporter:
                 continue
 
             val = getattr(obj, prp.key)
-            if isinstance(val, other_cls):
+            if val is None:
+                data[prp.key] = None
+            elif isinstance(val, other_cls):
                 data[prp.key] = self.get_id(val)
             elif isinstance(val, list):
                 data[prp.key] = list(self.get_id(i) for i in val)
             elif isinstance(val, dict):
                 data[prp.key] = dict((k, self.get_id(v)) for k, v in val.iteritems())
             else:
-                raise RuntimeError("Unknown SQLAlchemy relationship type: %s" % type(val))
+                raise RuntimeError("Unknown SQLAlchemy relationship type on %s: %s" % (prp.key, type(val)))
 
         return data
 

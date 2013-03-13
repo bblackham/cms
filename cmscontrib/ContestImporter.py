@@ -38,7 +38,7 @@ import zipfile
 
 from datetime import timedelta
 
-from sqlalchemy.orm import ColumnProperty, RelationshipProperty
+from sqlalchemy.orm import ColumnProperty, RelationshipProperty, configure_mappers
 from sqlalchemy.types import Boolean, Integer, Float, String, DateTime, Interval
 import cms.db.SQLAlchemyAll as class_hook
 
@@ -87,6 +87,8 @@ class ContestImporter:
         self.import_dir = import_source
 
         self.file_cacher = FileCacher()
+
+        configure_mappers()
 
     def run(self):
         """Interface to make the class do its job."""
@@ -156,7 +158,7 @@ class ContestImporter:
                     self.datas = json.load(fin)
 
                 self.objs = dict()
-                for _id, data in self.datas:
+                for _id, data in self.datas.iteritems():
                     obj = self.import_object(data)
                     self.objs[_id] = obj
                     session.add(obj)
@@ -272,7 +274,9 @@ class ContestImporter:
                 continue
 
             val = data[prp.key]
-            if type(val) == str:
+            if val is None:
+                setattr(obj, prp.key, None)
+            elif type(val) == str:
                 setattr(obj, prp.key, self.objs[val])
             elif type(val) == list:
                 setattr(obj, prp.key, list(self.objs[i] for i in val))
