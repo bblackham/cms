@@ -22,6 +22,7 @@
 import simplejson as json
 
 from cms import logger, plugin_lookup
+from cms.db.SQLAlchemyAll import Dataset
 
 
 def get_score_type(submission=None, task=None, dataset_id=None):
@@ -45,8 +46,7 @@ def get_score_type(submission=None, task=None, dataset_id=None):
     if dataset_id is None:
         dataset_id = task.active_dataset_id
 
-    with SessionGen(commit=False) as session:
-        dataset = Dataset.get_from_id(dataset_id, session)
+    dataset = Dataset.get_from_id(dataset_id, task.sa_session)
 
     score_type_name = dataset.score_type
     try:
@@ -60,7 +60,7 @@ def get_score_type(submission=None, task=None, dataset_id=None):
 
     public_testcases = dict(
         (testcase.num, testcase.public)
-        for testcase in task.datasets[dataset_id].testcases)
+        for testcase in dataset.testcases)
 
     cls = plugin_lookup(score_type_name,
                         "cms.grading.scoretypes", "scoretypes")

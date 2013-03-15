@@ -55,7 +55,7 @@ function update_additional_answer(element, invoker)
       {% set reevaluation_par_name = "submission" %}
       {% for s in sorted(submissions, key=lambda s: s.timestamp, reverse=True) %}
         {% set dataset_id = s.task.active_dataset_id %}
-        {% set sr = s.results.get(dataset_id) %}
+        {% set sr = s.get_result(dataset_id) %}
         {% if s.task.name in score_types %}
           {% set score_type = score_types[s.task.name] %}
         {% else %}

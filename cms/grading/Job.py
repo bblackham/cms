@@ -103,8 +103,7 @@ class CompilationJob(Job):
 
     @staticmethod
     def from_submission(submission, dataset_id):
-        with SessionGen(commit=False) as session:
-            dataset = Dataset.get_from_id(dataset_id, session)
+        dataset = Dataset.get_from_id(dataset_id, submission.sa_session)
 
         job = CompilationJob()
 
@@ -233,8 +232,7 @@ class EvaluationJob(Job):
 
     @staticmethod
     def from_submission(submission, dataset_id):
-        with SessionGen(commit=False) as session:
-            dataset = Dataset.get_from_id(dataset_id, session)
+        dataset = Dataset.get_from_id(dataset_id, submission.sa_session)
 
         job = EvaluationJob()
 
@@ -242,14 +240,14 @@ class EvaluationJob(Job):
         job.task_type = dataset.task_type
         job.task_type_parameters = json.loads(dataset.task_type_parameters)
 
-        # This should have been created by now.
-        assert dataset_id in submission.results
+        submission_result = submission.get_result(dataset_id)
 
-        submission_results = submission.results[dataset_id]
+        # This should have been created by now.
+        assert submission_result is not None
 
         # EvaluationJob; dict() is required to detach the dictionary
         # that gets added to the Job from the control of SQLAlchemy
-        job.executables = dict(submission_results.executables)
+        job.executables = dict(submission_result.executables)
         job.testcases = dataset.testcases
         job.time_limit = dataset.time_limit
         job.memory_limit = dataset.memory_limit

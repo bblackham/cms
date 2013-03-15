@@ -1405,7 +1405,7 @@ class EvaluationService(Service):
                 else:
                     this_dataset_id = dataset_id
 
-                submission_result = submission.results.get(this_dataset_id)
+                submission_result = submission.get_result(this_dataset_id)
                 if submission_result is None:
                     submission_result = SubmissionResult(
                             submission, submission.task, this_dataset_id)

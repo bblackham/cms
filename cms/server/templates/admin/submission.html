@@ -3,7 +3,7 @@
 {% block core %}
 {% from cms.grading.scoretypes import get_score_type %}
 {% set st = get_score_type(submission=s, dataset_id=shown_dataset.id) %}
-{% set sr = s.results.get(shown_dataset.id) %}
+{% set sr = s.get_result(shown_dataset.id) %}
 <div class="core_title">
   <h1>Submission {{ s.id }} (Task: <a href="{{ url_root }}/task/{{ s.task.id }}">{{ s.task.name }}</a>)</h1>
 </div>

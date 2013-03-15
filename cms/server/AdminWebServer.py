@@ -1366,7 +1366,7 @@ class AddTaskHandler(BaseHandler):
 
             statements = {}
             attachments = {}
-            datasets = {}
+            datasets = []
 
             # These belong to the first dataset.
             time_limit = sanity_check_time_limit(

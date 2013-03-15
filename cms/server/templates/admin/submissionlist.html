@@ -45,7 +45,7 @@
         <td><a href="{{ url_root }}/submission/{{ s.id }}/{{ shown_dataset.id }}">{{ str(s.timestamp) }}</a></td>
         <td><a href="{{ url_root }}/user/{{ s.user.id }}">{{ s.user.username }}</a></td>
         <td>
-          {% set sr = s.results.get(shown_dataset.id) %}
+          {% set sr = s.get_result(shown_dataset.id) %}
           {% if sr is None or sr.compilation_outcome is None %}
           Compiling...
           {% else %}

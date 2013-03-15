@@ -112,7 +112,7 @@ class Submission(Base):
             'language': self.language,
             'token': self.token,
             'results': [_sr.export_to_dict()
-                        for _, _sr in sorted(self.results.items())],
+                        for _, _sr in sorted(self.results)],
             }
         if self.token is not None:
             res['token'] = self.token.export_to_dict()
@@ -137,6 +137,9 @@ class Submission(Base):
         data['results'] = dict([(_r.dataset_id, _r)
                                 for _r in data['results']])
         return cls(**data)
+
+    def get_result(self, dataset_id):
+        return SubmissionResult.get_from_id((self.id, dataset_id), self.sa_session)
 
     def tokened(self):
         """Return if the user played a token against the submission.
@@ -191,7 +194,7 @@ class SubmissionResult(Base):
         Submission,
         backref=backref(
             "results",
-            collection_class=smart_mapped_collection('dataset_id'),
+            collection_class=list,
             cascade="all, delete-orphan",
             passive_deletes=True))
 
@@ -528,7 +531,7 @@ class Executable(Base):
     submission = relationship(
         Submission,
         backref=backref("executables",
-                        collection_class=smart_mapped_collection('dataset_id'),
+                        collection_class=list,
                         cascade="all, delete-orphan",
                         passive_deletes=True))
 
