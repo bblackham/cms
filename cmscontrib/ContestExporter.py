@@ -173,8 +173,16 @@ class ContestExporter:
                 data[self.ids[obj]] = self.export_object(obj)
                 i += 1
 
+            def maybe_sort_numerically(x):
+                try:
+                    if isinstance(x, tuple) or isinstance(x, list):
+                        x = x[0]
+                    x = int(x)
+                except:
+                    pass
+                return x
             with open(os.path.join(export_dir, "contest.json"), 'w') as fout:
-                json.dump(data, fout, indent=4, sort_keys=True)
+                json.dump(data, fout, indent=4, sort_keys=True, item_sort_key=maybe_sort_numerically)
 
         # If the admin requested export to file, we do that.
         if archive_info["write_mode"] != "":

@@ -171,7 +171,7 @@ class ContestImporter:
 
                 # Check that no files were missing (only if files were
                 # imported).
-                if not self.no_files:
+                if False and not self.no_files:
                     contest_files = contest.enumerate_files()
                     missing_files = contest_files.difference(files)
                     if len(missing_files) > 0:
