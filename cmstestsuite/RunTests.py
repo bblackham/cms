@@ -99,6 +99,8 @@ def create_or_get_user(contest_id):
         "password": "kamikaze",
         "first_name": "Ms. Test",
         "last_name": "Wabbit the %d%s" % (num_users, enumerify(num_users)),
+        "ip": "127.0.0.1",
+        "email": "a@a.a",
     }
     if username in users:
         user_id = users[username]['id']
