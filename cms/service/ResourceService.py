@@ -237,6 +237,7 @@ class ResourceService(Service):
         now = time.time()
         delta = now - self._last_saved_time
         while delta == 0.0:
+            now = time.time()
             delta = now - self._last_saved_time
         self._last_saved_time = now
         now = int(now)
