@@ -37,7 +37,7 @@ from cmscommon.DateTime import make_datetime, make_timestamp
 from datetime import timedelta
 
 
-def generate_random_password():
+def generate_random_password(context):
     import random
     chars = "abcdefghijklmnopqrstuvwxyz"
     return "".join([random.choice(chars) for unused_i in xrange(6)])
