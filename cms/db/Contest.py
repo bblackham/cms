@@ -165,6 +165,7 @@ class Contest(Base):
 
     # Moreover, we have the following methods.
     # get_submissions (defined in SQLAlchemyAll)
+    # get_submission_results (defined in SQLAlchemyAll)
     # get_user_tests (defined in SQLAlchemyAll)
 
     def export_to_dict(self, skip_submissions=False, skip_user_tests=False):
@@ -271,14 +272,16 @@ class Contest(Base):
                 files.add(_file.digest)
 
             # Enumerate managers
-            for _file in task.managers.values():
-                files.add(_file.digest)
+            for dataset in task.datasets:
+                for _file in dataset.managers.values():
+                    files.add(_file.digest)
 
             # Enumerate testcases
             if not light:
-                for testcase in task.testcases:
-                    files.add(testcase.input)
-                    files.add(testcase.output)
+                for dataset in task.datasets:
+                    for testcase in dataset.testcases:
+                        files.add(testcase.input)
+                        files.add(testcase.output)
 
         if not skip_submissions:
             for submission in self.get_submissions():
@@ -289,8 +292,9 @@ class Contest(Base):
 
                 # Enumerate executables
                 if not light:
-                    for _file in submission.executables.values():
-                        files.add(_file.digest)
+                    for sr in submission.results:
+                        for _file in sr.executables.itervalues():
+                            files.add(_file.digest)
 
         if not skip_user_tests:
             for user_test in self.get_user_tests():

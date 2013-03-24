@@ -72,6 +72,7 @@ class ScriptsContainer(object):
             ("20121116", "rename_user_test_limits"),
             ("20121207", "rename_score_parameters"),
             ("20121208", "add_score_precision"),
+            ("20130214", "use_task_datasets"),
             ]
         self.list.sort()
 
@@ -979,6 +980,296 @@ RENAME COLUMN score_parameters TO score_type_parameters;""")
                 session.execute("ALTER TABLE %(table)s "
                                 "ALTER COLUMN score_precision SET NOT NULL;" %
                                 {"table": table})
+
+    @staticmethod
+    def use_task_datasets():
+        """Completely restructure the database to support task datasets.
+        This was written mostly by diffing the respective SQL schemas.
+        It may not actually work for you, but it has worked at least once.
+
+        """
+        with SessionGen(commit=True) as session:
+            # It's worth noting that SQLAlchemy will have already created the
+            # two new tables submission_results and datasets for us. We just
+            # have to do everything *else!*
+            session.execute('''
+--
+-- Create datasets table.
+--
+
+-- All tasks will get a dataset version of 1 by default. Set the sequence value
+-- to 2 so that new datasets do not clash.
+SELECT pg_catalog.setval('datasets_version_seq', 2, true);
+
+-- Populate datasets table with data from tasks.
+INSERT INTO datasets (SELECT
+    id,
+    1,
+    'Default',
+    false,
+    time_limit,
+    memory_limit,
+    task_type,
+    task_type_parameters,
+    score_type,
+    score_type_parameters
+    FROM tasks);
+
+--
+-- Create submission_results table.
+--
+
+-- Copy data from submissions.
+INSERT INTO submission_results (SELECT
+    id, task_id, 1,
+    compilation_outcome,
+    compilation_text,
+    compilation_tries,
+    compilation_shard,
+    compilation_sandbox,
+    evaluation_outcome,
+    evaluation_tries,
+    score,
+    score_details,
+    public_score,
+    public_score_details,
+    ranking_score_details
+    FROM submissions);
+
+--
+-- Modify submissions table now that we no longer need its information.
+--
+ALTER TABLE submissions
+    DROP COLUMN compilation_outcome,
+    DROP COLUMN compilation_text,
+    DROP COLUMN compilation_tries,
+    DROP COLUMN compilation_shard,
+    DROP COLUMN compilation_sandbox,
+    DROP COLUMN evaluation_outcome,
+    DROP COLUMN evaluation_tries,
+    DROP COLUMN score,
+    DROP COLUMN score_details,
+    DROP COLUMN public_score,
+    DROP COLUMN public_score_details,
+    DROP COLUMN ranking_score_details;
+
+--
+-- We have to recreate the evaluations table because we insert columns in the
+-- middle. Thankfully, nothing depends on this table, so it's pretty simple.
+--
+
+CREATE TABLE evaluations_ (
+    id integer NOT NULL,
+    num integer NOT NULL,
+    submission_id integer NOT NULL,
+    task_id integer NOT NULL,
+    dataset_version integer,
+    text character varying,
+    outcome character varying,
+    memory_used integer,
+    execution_time double precision,
+    execution_wall_clock_time double precision,
+    evaluation_shard integer,
+    evaluation_sandbox character varying
+);
+
+INSERT INTO evaluations_ (SELECT
+    evaluations.id,
+    num,
+    submission_id,
+    submissions.task_id,
+    1,
+    text,
+    outcome,
+    memory_used,
+    execution_time,
+    execution_wall_clock_time,
+    evaluation_shard,
+    evaluation_sandbox
+    FROM evaluations INNER JOIN submissions ON submissions.id = submission_id);
+
+CREATE SEQUENCE evaluations_id_seq_
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+SELECT pg_catalog.setval('evaluations_id_seq_', last_value, true)
+    FROM evaluations_id_seq;
+
+-- Now kill the old table.
+DROP TABLE evaluations;
+-- And put this one in its place.
+ALTER SEQUENCE evaluations_id_seq_ RENAME TO evaluations_id_seq;
+ALTER TABLE evaluations_ RENAME TO evaluations;
+
+ALTER SEQUENCE evaluations_id_seq OWNED BY evaluations.id;
+
+ALTER TABLE ONLY evaluations ALTER COLUMN id
+    SET DEFAULT nextval('evaluations_id_seq'::regclass);
+ALTER TABLE ONLY evaluations
+    ADD CONSTRAINT cst_evaluations_submission_id_num
+        UNIQUE (submission_id, dataset_version, num);
+ALTER TABLE ONLY evaluations
+    ADD CONSTRAINT evaluations_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY evaluations
+    ADD CONSTRAINT evaluations_submission_id_fkey
+        FOREIGN KEY (submission_id, task_id, dataset_version)
+        REFERENCES submission_results(submission_id, task_id, dataset_version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY evaluations
+    ADD CONSTRAINT evaluations_submission_id_fkey1
+        FOREIGN KEY (submission_id)
+        REFERENCES submissions(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY evaluations
+    ADD CONSTRAINT evaluations_task_id_fkey
+        FOREIGN KEY (task_id, dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY evaluations
+    ADD CONSTRAINT evaluations_task_id_fkey1
+        FOREIGN KEY (task_id)
+        REFERENCES tasks(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+
+
+--
+-- The executables table also gets a few bonus columns.
+--
+ALTER TABLE executables ADD COLUMN task_id integer;
+ALTER TABLE executables ADD COLUMN dataset_version integer;
+
+-- Pre-populate with the right task id.
+UPDATE executables SET task_id = s.task_id, dataset_version = 1
+    FROM submissions s WHERE executables.submission_id = s.id;
+ALTER TABLE executables ALTER COLUMN task_id SET NOT NULL;
+
+--
+-- The manager table also gets an extra column.
+--
+ALTER TABLE managers ADD COLUMN dataset_version integer;
+UPDATE managers SET dataset_version = 1;
+
+--
+-- The task_testcases table also gets two extra columns.
+--
+ALTER TABLE task_testcases ADD COLUMN dataset_version integer;
+UPDATE task_testcases SET dataset_version = 1;
+ALTER TABLE task_testcases ALTER COLUMN dataset_version SET NOT NULL;
+
+--
+-- Finally, tasks itself gets an active_dataset_version column.
+--
+ALTER TABLE tasks ADD COLUMN active_dataset_version integer;
+UPDATE tasks SET active_dataset_version = 1;
+
+
+--
+-- Now we can remove the information from tasks that was moved to datasets.
+--
+ALTER TABLE tasks
+    DROP COLUMN time_limit,
+    DROP COLUMN memory_limit,
+    DROP COLUMN task_type,
+    DROP COLUMN task_type_parameters,
+    DROP COLUMN score_type,
+    DROP COLUMN score_type_parameters;
+
+--
+-- Fix all foreign key constraints.
+--
+ALTER TABLE ONLY tasks
+    ADD CONSTRAINT fk_dataset_version FOREIGN KEY (id, active_dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE SET DEFAULT
+        ON DELETE SET DEFAULT;
+ALTER TABLE ONLY executables
+    DROP CONSTRAINT cst_executables_submission_id_filename,
+    ADD CONSTRAINT cst_executables_submission_id_filename
+    UNIQUE (submission_id, dataset_version, filename);
+ALTER TABLE ONLY executables
+    DROP CONSTRAINT executables_submission_id_fkey,
+    ADD CONSTRAINT executables_submission_id_fkey
+        FOREIGN KEY (submission_id, task_id, dataset_version)
+        REFERENCES submission_results(submission_id, task_id, dataset_version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY executables
+    ADD CONSTRAINT executables_submission_id_fkey1
+        FOREIGN KEY (submission_id)
+        REFERENCES submissions(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY executables
+    ADD CONSTRAINT executables_task_id_fkey
+        FOREIGN KEY (task_id, dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY executables
+    ADD CONSTRAINT executables_task_id_fkey1
+        FOREIGN KEY (task_id)
+        REFERENCES tasks(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY managers
+    DROP CONSTRAINT cst_managers_task_id_filename,
+    ADD CONSTRAINT cst_managers_task_id_dataset_version_filename
+        UNIQUE (task_id, dataset_version, filename);
+ALTER TABLE ONLY managers
+    DROP CONSTRAINT managers_task_id_fkey,
+    ADD CONSTRAINT managers_task_id_fkey FOREIGN KEY (task_id, dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY managers
+    ADD CONSTRAINT managers_task_id_fkey1 FOREIGN KEY (task_id)
+        REFERENCES tasks(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY task_testcases
+    DROP CONSTRAINT cst_task_testcases_task_id_num,
+    ADD CONSTRAINT cst_task_testcases_task_id_num
+        UNIQUE (task_id, dataset_version, num);
+ALTER TABLE ONLY task_testcases
+    DROP CONSTRAINT task_testcases_task_id_fkey,
+    ADD CONSTRAINT task_testcases_task_id_fkey
+        FOREIGN KEY (task_id, dataset_version)
+        REFERENCES datasets(task_id, version)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+ALTER TABLE ONLY task_testcases
+    ADD CONSTRAINT task_testcases_task_id_fkey1
+        FOREIGN KEY (task_id)
+        REFERENCES tasks(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+
+--
+-- Finally, create new indexes.
+--
+CREATE INDEX ix_evaluations_dataset_version ON evaluations
+    USING btree (dataset_version);
+CREATE INDEX ix_evaluations_submission_id ON evaluations
+    USING btree (submission_id);
+CREATE INDEX ix_evaluations_task_id ON evaluations
+    USING btree (task_id);
+CREATE INDEX ix_executables_dataset_version ON executables
+    USING btree (dataset_version);
+CREATE INDEX ix_executables_task_id ON executables
+    USING btree (task_id);
+CREATE INDEX ix_managers_dataset_version ON managers
+    USING btree (dataset_version);
+CREATE INDEX ix_task_testcases_dataset_version ON task_testcases
+    USING btree (dataset_version);
+
+COMMIT;
+''')
 
 
 def execute_single_script(scripts_container, script):

@@ -26,14 +26,17 @@ db objects must be imported from this module.
 
 import sys
 
+from sqlalchemy.orm import joinedload
+
 from cms.db.SQLAlchemyUtils import Base, metadata, Session, \
      ScopedSession, SessionGen
 
 from cms.db.Contest import Contest, Announcement
 from cms.db.User import User, Message, Question
-from cms.db.Task import Task, Manager, Testcase, Attachment, \
+from cms.db.Task import Task, Manager, Dataset, Testcase, Attachment, \
      SubmissionFormatElement, Statement
-from cms.db.Submission import Submission, Token, Evaluation, File, Executable
+from cms.db.Submission import Submission, SubmissionResult, Token, \
+    Evaluation, File, Executable
 from cms.db.UserTest import UserTest, UserTestFile, UserTestExecutable, \
     UserTestManager
 from cms.db.FSObject import FSObject
@@ -51,8 +54,27 @@ def get_submissions(self):
     returns (list): list of submissions.
 
     """
+    # We join this load with submission results and tokens, because we almost
+    # always want it.
     return self.sa_session.query(Submission).join(Task).\
+           options(joinedload(Submission.results)).\
+           options(joinedload(Submission.token)).\
            filter(Task.contest == self).all()
+
+
+def get_submission_results(self):
+    """Returns a list of submission results for all submissions in
+    the current contest, as evaluated against the active dataset
+    for each task.
+
+    returns (list): list of submissions.
+
+    """
+    return self.sa_session.query(SubmissionResult).join(Task).\
+           filter(Task.contest == self).\
+           filter(Task.active_dataset_id ==
+                  SubmissionResult.dataset_id).\
+           all()
 
 
 def get_user_tests(self):
@@ -66,6 +88,7 @@ def get_user_tests(self):
         filter(User.contest == self).all()
 
 Contest.get_submissions = get_submissions
+Contest.get_submission_results = get_submission_results
 Contest.get_user_tests = get_user_tests
 
 

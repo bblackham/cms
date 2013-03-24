@@ -21,10 +21,19 @@
 
 import os
 import codecs
+from collections import namedtuple
+
+from sqlalchemy.orm import joinedload
 
 from cms import logger
-from cms.db.SQLAlchemyAll import SessionGen, Submission
+from cms.db.SQLAlchemyAll import SessionGen, Submission, SubmissionResult
 from cms.grading.Sandbox import Sandbox
+
+
+SubmissionScoreDelta = namedtuple('SubmissionScoreDelta',
+    ['submission', 'old_score', 'new_score',
+     'old_public_score', 'new_public_score',
+     'old_ranking_score_details', 'new_ranking_score_details'])
 
 
 class JobException(Exception):
@@ -558,6 +567,62 @@ def white_diff_step(sandbox, output_filename,
         return outcome, text
 
 
+def compute_changes_for_dataset(old_dataset, new_dataset,
+            look_at_score=True, look_at_public_score=True,
+            look_at_ranking_score_details=True):
+    """This function will compute the differences expected when changing from
+    one dataset to another.
+
+    old_dataset (Dataset): the original dataset, typically the active one.
+    new_dataset (Dataset): the dataset to compare against.
+    look_at_score (bool): compare the score of a submission
+    look_at_public_score (bool): compare the public_score of a submission
+    look_at_ranking_score_details (bool): compare the ranking_score_details of
+    a submission
+
+    returns (list): a list of tuples of SubmissionScoreDelta tuples where they
+    differ. Those entries that do not differ will have None in the pair of
+    respective tuple entries.
+
+    """
+    # If we are switching tasks, something has gone seriously wrong.
+    assert old_dataset.task_id == new_dataset.task_id
+
+    task = old_dataset.task
+
+    def compare(a, b):
+        if a == b:
+            return False, (None, None)
+        else:
+            return True, (a, b)
+
+    # Construct query with all relevant fields to avoid roundtrips to the DB.
+    submissions = task.sa_session.query(Submission)\
+                .filter(Submission.task_id == task.id)\
+                .options(joinedload(Submission.user))\
+                .options(joinedload(Submission.token))\
+                .options(joinedload(Submission.results)).all()
+    ret = []
+    for s in submissions:
+        old = s.get_result(old_dataset.id)
+        new = s.get_result(new_dataset.id)
+
+        diff1, pair1 = compare(
+            old.score if old is not None else None,
+            new.score if new is not None else None)
+        diff2, pair2 = compare(
+            old.public_score if old is not None else None,
+            new.public_score if new is not None else None)
+        diff3, pair3 = compare(
+            old.ranking_score_details if old is not None else None,
+            new.ranking_score_details if new is not None else None)
+
+        if diff1 or diff2 or diff3:
+            ret.append(SubmissionScoreDelta(*(s,) + pair1 + pair2 + pair3))
+
+    return ret
+
+
 ## Computing global scores (for ranking). ##
 
 def task_score(user, task):
@@ -571,15 +636,24 @@ def task_score(user, task):
                           yet to score.
 
     """
-    def waits_for_score(submission):
+    # As this function is primarily used when generating a rankings table
+    # (AWS's RankingHandler), we optimize for the case where we are generating
+    # results for all users and all tasks. As such, for the following code to
+    # be more efficient, the query that generated task and user should have
+    # come from a joinedload with the submissions, tokens and
+    # submission_results table.  Doing so means that this function should incur
+    # no exta database queries.
+
+    def waits_for_score(submission_result):
         """Return if submission could be scored but it currently is
         not.
 
-        submission (Submission): the submission to check.
+        submission_result (SubmissionResult): the result to check. May be None.
 
         """
-        return submission.compilation_outcome != "fail" and \
-               not submission.scored()
+        return submission_result is None or \
+               submission_result.compilation_outcome != "fail" and \
+               not submission_result.scored()
 
     # The score of the last submission (if valid, otherwise 0.0).
     last_score = 0.0
@@ -590,29 +664,29 @@ def task_score(user, task):
     # / evaluated / scored.
     partial = False
 
-    with SessionGen(commit=False) as session:
-        submissions = session.query(Submission).\
-            filter(Submission.user == user).\
-            filter(Submission.task == task).\
-            order_by(Submission.timestamp).all()
+    submissions = [s for s in user.submissions if s.task_id == task.id]
+    submissions.sort(key=lambda s: s.timestamp)
 
-        if submissions == []:
-            return 0.0, False
+    if submissions == []:
+        return 0.0, False
 
-        # Last score: if the last submission is scored we use that,
-        # otherwise we use 0.0 (and mark that the score is partial
-        # when the last submission could be scored).
-        if submissions[-1].scored():
-            last_score = submissions[-1].score
-        elif waits_for_score(submissions[-1]):
-            partial = True
+    # Last score: if the last submission is scored we use that,
+    # otherwise we use 0.0 (and mark that the score is partial
+    # when the last submission could be scored).
+    s = submissions[-1]
+    last_sr = s.get_result(task.active_dataset_id)
 
-        for submission in submissions:
-            if submission.token is not None:
-                if submission.scored():
-                    max_tokened_score = max(max_tokened_score,
-                                            submission.score)
-                elif waits_for_score(submission):
-                    partial = True
+    if last_sr is not None and last_sr.scored():
+        last_score = last_sr.score
+    elif waits_for_score(last_sr):
+        partial = True
+
+    for submission in submissions:
+        sr = submission.get_result(task.active_dataset_id)
+        if submission.tokened():
+            if sr is not None and sr.scored():
+                max_tokened_score = max(max_tokened_score, sr.score)
+            elif waits_for_score(sr):
+                partial = True
 
     return max(last_score, max_tokened_score), partial

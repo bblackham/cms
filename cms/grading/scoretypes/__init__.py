@@ -22,13 +22,15 @@
 import simplejson as json
 
 from cms import logger, plugin_lookup
+from cms.db.SQLAlchemyAll import Dataset
 
 
-def get_score_type(submission=None, task=None):
-    """Given a task, istantiate the corresponding ScoreType class.
+def get_score_type(submission=None, task=None, dataset_id=None):
+    """Given a task, instantiate the corresponding ScoreType class.
 
     submission (Submission): the submission that needs the task type.
     task (Task): the task we want to score.
+    dataset_id (int): the dataset id to use, or None for active.
 
     return (object): an instance of the correct ScoreType class.
 
@@ -41,16 +43,33 @@ def get_score_type(submission=None, task=None):
     if submission is not None:
         task = submission.task
 
-    score_type_name = task.score_type
+    if dataset_id is None:
+        dataset_id = task.active_dataset_id
+
+    dataset = Dataset.get_from_id(dataset_id, task.sa_session)
+
+    score_type_name = dataset.score_type
     try:
-        score_type_parameters = json.loads(task.score_type_parameters)
+        score_type_parameters = json.loads(dataset.score_type_parameters)
     except json.decoder.JSONDecodeError as error:
-        logger.error("Cannot decode score type parameters.\n%r." % error)
-        raise
-    public_testcases = dict((testcase.num, testcase.public)
-                            for testcase in task.testcases)
+        logger.error("Cannot decode score type parameters for task "
+            "%d \"%s\", dataset %d \"%s\"\n%r." % (
+                task.id, task.name, dataset.id, dataset.description,
+                error))
+        return None
+
+    public_testcases = dict(
+        (testcase.num, testcase.public)
+        for testcase in dataset.testcases)
 
     cls = plugin_lookup(score_type_name,
                         "cms.grading.scoretypes", "scoretypes")
 
-    return cls(score_type_parameters, public_testcases)
+    try:
+        return cls(score_type_parameters, public_testcases)
+    except Exception as error:
+        logger.error("Cannot instantiate score type for task "
+            "%d \"%s\", dataset %d \"%s\"\n%r." % (
+                task.id, task.name, dataset.id, dataset.description,
+                error))
+        return None

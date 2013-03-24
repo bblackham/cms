@@ -25,13 +25,14 @@ used directly (import  from SQLAlchemyAll).
 
 """
 
-from sqlalchemy.schema import Column, ForeignKey, UniqueConstraint
+from sqlalchemy.schema import Column, ForeignKey, ForeignKeyConstraint, \
+    UniqueConstraint
 from sqlalchemy.types import Integer, Float, String, DateTime
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.orderinglist import ordering_list
 
 from cms.db.SQLAlchemyUtils import Base
-from cms.db.Task import Task
+from cms.db.Task import Task, Dataset
 from cms.db.User import User
 from cms.db.SmartMappedCollection import smart_mapped_collection
 
@@ -85,6 +86,119 @@ class Submission(Base):
     language = Column(
         String,
         nullable=True)
+
+    # Follows the description of the fields automatically added by
+    # SQLAlchemy.
+    # files (dict of File objects indexed by filename)
+    # token (Token object or None)
+    # results (dict of SubmissionResult indexed by dataset_id)
+
+    LANGUAGES = ["c", "cpp", "pas"]
+    LANGUAGES_MAP = {".c": "c",
+                     ".cpp": "cpp",
+                     ".cc": "cpp",
+                     ".pas": "pas",
+                     }
+
+    def export_to_dict(self):
+        """Return object data as a dictionary.
+
+        """
+        res = {
+            'task': self.task.name,
+            'timestamp': make_timestamp(self.timestamp),
+            'files': [_file.export_to_dict()
+                      for _file in self.files.itervalues()],
+            'language': self.language,
+            'token': self.token,
+            'results': [_sr.export_to_dict()
+                        for _, _sr in sorted(self.results)],
+            }
+        if self.token is not None:
+            res['token'] = self.token.export_to_dict()
+        return res
+
+    @classmethod
+    def import_from_dict(cls, data, tasks_by_name):
+        """Build the object using data from a dictionary.
+
+        """
+        data['files'] = [File.import_from_dict(file_data)
+                         for file_data in data['files']]
+        data['files'] = dict([(_file.filename, _file)
+                              for _file in data['files']])
+        if data['token'] is not None:
+            data['token'] = Token.import_from_dict(data['token'])
+        data['task'] = tasks_by_name[data['task']]
+        data['user'] = None
+        data['timestamp'] = make_datetime(data['timestamp'])
+        data['results'] = [SubmissionResult.import_from_dict(_r, data['task'])
+                           for _r in data['results']]
+        data['results'] = dict([(_r.dataset_id, _r)
+                                for _r in data['results']])
+        return cls(**data)
+
+    def get_result(self, dataset_id):
+        return SubmissionResult.get_from_id((self.id, dataset_id), self.sa_session)
+
+    def tokened(self):
+        """Return if the user played a token against the submission.
+
+        return (bool): True if tokened, False otherwise.
+
+        """
+        return self.token is not None
+
+    def play_token(self, timestamp=None):
+        """Tell the submission that a token has been used.
+
+        timestamp (int): the time the token has been played.
+
+        """
+        self.token = Token(timestamp=timestamp)
+
+
+class SubmissionResult(Base):
+    """Class to store the evaluation results of a submission. Not to
+    be used directly (import it from SQLAlchemyAll).
+
+    """
+    __tablename__ = 'submission_results'
+    __table_args__ = (
+        UniqueConstraint('submission_id', 'dataset_id',
+                         name='cst_submission_results_submission_id_dataset_id'),
+        )
+
+    # Primary key is submission_id, dataset_id.
+    # Yes, task_id is redundant, as we can get it from the
+    # submission, but we need it in order to be a sane foreign key
+    # into datasets.
+    # Note that there is no constraint to enforce that task_id ==
+    # submission.task_id. If you can figure this out, you will win a
+    # pony.
+    submission_id = Column(
+        Integer,
+        ForeignKey(Submission.id,
+            onupdate="CASCADE", ondelete="CASCADE"),
+        primary_key=True)
+
+    dataset_id = Column(
+        Integer,
+        ForeignKey(Dataset.id,
+            onupdate="CASCADE", ondelete="CASCADE"),
+        primary_key=True)
+    dataset = relationship(
+        Dataset)
+
+    submission = relationship(
+        Submission,
+        backref=backref(
+            "results",
+            collection_class=list,
+            cascade="all, delete-orphan",
+            passive_deletes=True))
+
+    # Now below follow the actual result fields.
 
     # Compilation outcome (can be None = yet to compile, "ok" =
     # compilation successful and we can evaluate, "fail" =
@@ -157,75 +271,68 @@ class Submission(Base):
 
     # Follows the description of the fields automatically added by
     # SQLAlchemy.
-    # files (dict of File objects indexed by filename)
     # executables (dict of Executable objects indexed by filename)
     # evaluations (list of Evaluation objects, one for testcase)
-    # token (Token object or None)
-
-    LANGUAGES = ["c", "cpp", "pas"]
-    LANGUAGES_MAP = {".c": "c",
-                     ".cpp": "cpp",
-                     ".cc": "cpp",
-                     ".pas": "pas",
-                     }
 
     def export_to_dict(self):
         """Return object data as a dictionary.
 
         """
         res = {
-            'task': self.task.name,
-            'timestamp': make_timestamp(self.timestamp),
-            'files': [_file.export_to_dict()
-                      for _file in self.files.itervalues()],
-            'language': self.language,
+            'dataset_id': self.dataset.id,
             'compilation_outcome': self.compilation_outcome,
             'compilation_tries': self.compilation_tries,
             'compilation_text': self.compilation_text,
             'compilation_shard': self.compilation_shard,
             'compilation_sandbox': self.compilation_sandbox,
+            'evaluation_outcome': self.evaluation_outcome,
+            'evaluation_tries': self.evaluation_tries,
+            'score': self.score,
+            'score_details': self.score_details,
+            'public_score': self.public_score,
+            'public_score_details': self.public_score_details,
+            'ranking_score_details': self.ranking_score_details,
+            'evaluations': [evaluation.export_to_dict()
+                            for evaluation in self.evaluations],
             'executables': [executable.export_to_dict()
                             for executable
                             in self.executables.itervalues()],
-            'evaluation_outcome': self.evaluation_outcome,
-            'evaluations': [evaluation.export_to_dict()
-                            for evaluation in self.evaluations],
-            'evaluation_tries': self.evaluation_tries,
-            'token': self.token
             }
-        if self.token is not None:
-            res['token'] = self.token.export_to_dict()
         return res
 
     @classmethod
-    def import_from_dict(cls, data, tasks_by_name):
+    def import_from_dict(cls, data, task):
         """Build the object using data from a dictionary.
 
         """
-        data['files'] = [File.import_from_dict(file_data)
-                         for file_data in data['files']]
-        data['files'] = dict([(_file.filename, _file)
-                              for _file in data['files']])
+        data['task'] = task
         data['executables'] = [Executable.import_from_dict(executable_data)
                                for executable_data in data['executables']]
         data['executables'] = dict([(executable.filename, executable)
                                     for executable in data['executables']])
         data['evaluations'] = [Evaluation.import_from_dict(eval_data)
                                for eval_data in data['evaluations']]
-        if data['token'] is not None:
-            data['token'] = Token.import_from_dict(data['token'])
-        data['task'] = tasks_by_name[data['task']]
-        data['user'] = None
-        data['timestamp'] = make_datetime(data['timestamp'])
         return cls(**data)
 
-    def tokened(self):
-        """Return if the user played a token against the submission.
+    @classmethod
+    def get_from_id_or_create(cls, submission_id, dataset_id, session):
+        # Find an existing submission result.
+        submission_result = SubmissionResult.get_from_id(
+                (submission_id, dataset_id), session)
 
-        return (bool): True if tokened, False otherwise.
+        # Create one if it doesn't exist.
+        if submission_result is None:
+            submission = Submission.get_from_id(submission_id, session)
+            dataset = Dataset.get_from_id(dataset_id, session)
+            if submission is None or dataset is None:
+                return None
 
-        """
-        return self.token is not None
+            submission_result = SubmissionResult(
+                    submission=submission, dataset=dataset)
+
+            session.add(submission_result)
+
+        return submission_result
 
     def compiled(self):
         """Return if the submission has been compiled.
@@ -278,14 +385,6 @@ class Submission(Base):
         self.score_details = None
         self.public_score = None
         self.public_score_details = None
-
-    def play_token(self, timestamp=None):
-        """Tell the submission that a token has been used.
-
-        timestamp (int): the time the token has been played.
-
-        """
-        self.token = Token(timestamp=timestamp)
 
 
 class Token(Base):
@@ -400,7 +499,11 @@ class Executable(Base):
     """
     __tablename__ = 'executables'
     __table_args__ = (
-        UniqueConstraint('submission_id', 'filename',
+        ForeignKeyConstraint(
+            ('submission_id', 'dataset_id'),
+            (SubmissionResult.submission_id, SubmissionResult.dataset_id),
+            onupdate="CASCADE", ondelete="CASCADE"),
+        UniqueConstraint('submission_id', 'dataset_id', 'filename',
                          name='cst_executables_submission_id_filename'),
         )
 
@@ -417,15 +520,34 @@ class Executable(Base):
         String,
         nullable=False)
 
-    # Submission (id and object) of the submission.
+    # Submission id and object of the submission.
     submission_id = Column(
         Integer,
         ForeignKey(Submission.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
+
     submission = relationship(
         Submission,
+        backref=backref("executables",
+                        collection_class=list,
+                        cascade="all, delete-orphan",
+                        passive_deletes=True))
+
+    # Dataset id and object that this executable belongs to.
+    dataset_id = Column(
+        Integer,
+        ForeignKey(Dataset.id,
+                   onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+        index=True)
+    dataset = relationship(
+        Dataset)
+
+    # Submission result owning this executable.
+    submission_result = relationship(
+        SubmissionResult,
         backref=backref('executables',
                         collection_class=smart_mapped_collection('filename'),
                         cascade="all, delete-orphan",
@@ -449,7 +571,11 @@ class Evaluation(Base):
     """
     __tablename__ = 'evaluations'
     __table_args__ = (
-        UniqueConstraint('submission_id', 'num',
+        ForeignKeyConstraint(
+            ('submission_id', 'dataset_id'),
+            (SubmissionResult.submission_id, SubmissionResult.dataset_id),
+            onupdate="CASCADE", ondelete="CASCADE"),
+        UniqueConstraint('submission_id', 'dataset_id', 'num',
                          name='cst_evaluations_submission_id_num'),
         )
 
@@ -463,15 +589,27 @@ class Evaluation(Base):
         Integer,
         nullable=False)
 
-    # Submission (id and object) of the submission.
+    # Submission id of the submission.
     submission_id = Column(
         Integer,
         ForeignKey(Submission.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
-    submission = relationship(
-        Submission,
+
+    # Dataset id and object that this evaluation belongs to.
+    dataset_id = Column(
+        Integer,
+        ForeignKey(Dataset.id,
+                   onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+        index=True)
+    task = relationship(
+        Dataset)
+
+    # Submission result owning this evaluation.
+    submission_result = relationship(
+        SubmissionResult,
         backref=backref('evaluations',
                         collection_class=ordering_list('num'),
                         order_by=[num],

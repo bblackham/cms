@@ -25,8 +25,8 @@ directly (import it from SQLAlchemyAll).
 
 """
 
-from sqlalchemy.schema import Column, ForeignKey, CheckConstraint, \
-    UniqueConstraint
+from sqlalchemy.schema import Column, ForeignKey, ForeignKeyConstraint, \
+    CheckConstraint, UniqueConstraint
 from sqlalchemy.types import Boolean, Integer, Float, String, Interval
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.orderinglist import ordering_list
@@ -55,7 +55,8 @@ class Task(Base):
     # Auto increment primary key.
     id = Column(
         Integer,
-        primary_key=True)
+        primary_key=True,
+        autoincrement='ignore_fk')
 
     # Number of the task for sorting.
     num = Column(
@@ -91,34 +92,6 @@ class Task(Base):
         String,
         nullable=False,
         default="[]")
-
-    # Time and memory limits for every testcase.
-    time_limit = Column(
-        Float,
-        nullable=True)
-    memory_limit = Column(
-        Integer,
-        nullable=True)
-
-    # Name of the TaskType child class suited for the task.
-    task_type = Column(
-        String,
-        nullable=False)
-
-    # Parameters for the task type class, JSON encoded.
-    task_type_parameters = Column(
-        String,
-        nullable=False)
-
-    # Name of the ScoreType child class suited for the task.
-    score_type = Column(
-        String,
-        nullable=False)
-
-    # Parameters for the score type class, JSON encoded.
-    score_type_parameters = Column(
-        String,
-        nullable=False)
 
     # Parameter to define the token behaviour. See Contest.py for
     # details. The only change is that these parameters influence the
@@ -184,12 +157,30 @@ class Task(Base):
         nullable=False,
         default=0)
 
+    # Active data set currently being used for scoring.
+    active_dataset_id = Column(
+        Integer,
+        ForeignKey('datasets.id',
+                   onupdate="SET DEFAULT", ondelete="SET DEFAULT",
+                   use_alter=True,
+                   name='fk_active_dataset_id'),
+        nullable=True)
+
+    # Provide easy access to the active dataset object.
+    active_dataset = relationship(
+        'Dataset',
+        primaryjoin='and_(Task.active_dataset_id==Dataset.id)',
+        post_update=True,
+        uselist=False,
+        single_parent=True,
+        cascade='all, delete-orphan',
+        )
+
     # Follows the description of the fields automatically added by
     # SQLAlchemy.
     # submission_format (list of SubmissionFormatElement objects)
-    # testcases (list of Testcase objects)
+    # datasets (dict of Dataset objects indexed by id)
     # attachments (dict of Attachment objects indexed by filename)
-    # managers (dict of Manager objects indexed by filename)
     # statements (dict of Statement objects indexed by language code)
     # submissions (list of Submission objects)
     # user_tests (list of UserTest objects)
@@ -212,21 +203,13 @@ class Task(Base):
                 'attachments':          [attachment.export_to_dict()
                                          for attachment
                                          in self.attachments.itervalues()],
-                'time_limit':           self.time_limit,
-                'memory_limit':         self.memory_limit,
                 'primary_statements':   self.primary_statements,
-                'task_type':            self.task_type,
-                'task_type_parameters': self.task_type_parameters,
                 'submission_format':    [element.export_to_dict()
                                          for element
                                          in self.submission_format],
-                'managers':             [manager.export_to_dict()
-                                         for manager
-                                         in self.managers.itervalues()],
-                'score_type':           self.score_type,
-                'score_type_parameters': self.score_type_parameters,
-                'testcases':            [testcase.export_to_dict()
-                                         for testcase in self.testcases],
+                'active_dataset': self.active_dataset_id,
+                'datasets': [dataset.export_to_dict()
+                             for dataset in self.datasets],
                 'token_initial':        self.token_initial,
                 'token_max':            self.token_max,
                 'token_total':          self.token_total,
@@ -257,12 +240,11 @@ class Task(Base):
                                     for attachment in data['attachments']])
         data['submission_format'] = [SubmissionFormatElement.import_from_dict(
             sfe_data) for sfe_data in data['submission_format']]
-        data['managers'] = [Manager.import_from_dict(manager_data)
-                            for manager_data in data['managers']]
-        data['managers'] = dict([(manager.filename, manager)
-                                 for manager in data['managers']])
-        data['testcases'] = [Testcase.import_from_dict(testcase_data)
-                             for testcase_data in data['testcases']]
+        data['datasets'] = [Dataset.import_from_dict(dataset_data)
+                            for dataset_data in data['datasets']]
+        data['datasets'] = dict([(_d.id, _d) for _d in data['datasets']])
+        if data['active_dataset'] is not None:
+            data['active_dataset'] = data['datasets'][data['active_dataset']]
         data['statements'] = [Statement.import_from_dict(statement_data)
                               for statement_data in data['statements']]
         data['statements'] = dict([(statement.language, statement)
@@ -283,6 +265,112 @@ class Task(Base):
         return cls(**data)
 
 
+class Dataset(Base):
+    """Class to store the information about a data set. Not to be used
+    directly (import it from SQLAlchemyAll).
+
+    """
+    __tablename__ = 'datasets'
+    __table_args__ = (
+        UniqueConstraint('id', 'task_id', 'description',
+                         name='cst_datasets_task_id_description'),
+        )
+
+    # Auto increment primary key.
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True)
+
+    # Task id and object owning the testcase.
+    task_id = Column(
+        Integer,
+        ForeignKey(Task.id,
+            onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+        autoincrement=False)
+
+    task = relationship(
+        Task,
+        primaryjoin='Task.id==Dataset.task_id',
+        foreign_keys=task_id,
+        backref=backref('datasets',
+                        collection_class=list,
+                        cascade="all, delete-orphan",
+                        passive_deletes=True))
+
+    description = Column(
+        String)
+
+    autojudge = Column(Boolean,
+        nullable=False,
+        default=False)
+
+    # Time and memory limits for every testcase.
+    time_limit = Column(
+        Float,
+        nullable=True)
+    memory_limit = Column(
+        Integer,
+        nullable=True)
+
+    # Name of the TaskType child class suited for the task.
+    task_type = Column(
+        String,
+        nullable=False)
+
+    # Parameters for the task type class, JSON encoded.
+    task_type_parameters = Column(
+        String,
+        nullable=False)
+
+    # Name of the ScoreType child class suited for the task.
+    score_type = Column(
+        String,
+        nullable=False)
+
+    # Parameters for the score type class, JSON encoded.
+    score_type_parameters = Column(
+        String,
+        nullable=False)
+
+    # Follows the description of the fields automatically added by
+    # SQLAlchemy.
+    # managers (dict of Manager objects indexed by filename)
+    # testcases (list of Testcase objects)
+
+    def export_to_dict(self):
+        """Return object data as a dictionary.
+
+        """
+        return {'description': self.description,
+                'testcases': [testcase.export_to_dict()
+                              for testcase in self.testcases],
+                'autojudge': self.autojudge,
+                'time_limit':           self.time_limit,
+                'memory_limit':         self.memory_limit,
+                'task_type':            self.task_type,
+                'task_type_parameters': self.task_type_parameters,
+                'score_type':           self.score_type,
+                'score_type_parameters': self.score_type_parameters,
+                'managers': [manager.export_to_dict()
+                             for manager in self.managers.itervalues()],
+            }
+
+    @classmethod
+    def import_from_dict(cls, data):
+        """Build the object using data from a dictionary.
+
+        """
+        data['managers'] = [Manager.import_from_dict(manager_data)
+                            for manager_data in data['managers']]
+        data['managers'] = dict([(manager.filename, manager)
+                                 for manager in data['managers']])
+        data['testcases'] = [Testcase.import_from_dict(testcase)
+                             for testcase in data['testcases']]
+        return cls(**data)
+
+
 class Testcase(Base):
     """Class to store the information about a testcase. Not to be used
     directly (import it from SQLAlchemyAll).
@@ -290,8 +378,8 @@ class Testcase(Base):
     """
     __tablename__ = 'task_testcases'
     __table_args__ = (
-        UniqueConstraint('task_id', 'num',
-                         name='cst_task_testcases_task_id_num'),
+        UniqueConstraint('dataset_id', 'num',
+                         name='cst_task_testcases_dataset_id_num'),
         )
 
     # Auto increment primary key.
@@ -319,15 +407,17 @@ class Testcase(Base):
         String,
         nullable=False)
 
-    # Task (id and object) owning the testcase.
-    task_id = Column(
+    # Dataset owning this testcase.
+    dataset_id = Column(
         Integer,
-        ForeignKey(Task.id,
+        ForeignKey(Dataset.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
-    task = relationship(
-        Task,
+
+    # Dataset object owning this testcase.
+    dataset = relationship(
+        Dataset,
         backref=backref('testcases',
                         collection_class=ordering_list('num'),
                         order_by=[num],
@@ -340,7 +430,8 @@ class Testcase(Base):
         """
         return {'input':  self.input,
                 'output': self.output,
-                'public': self.public}
+                'public': self.public,
+                'num': self.num}
 
     @classmethod
     def import_from_dict(cls, data):
@@ -418,8 +509,8 @@ class Manager(Base):
     """
     __tablename__ = 'managers'
     __table_args__ = (
-        UniqueConstraint('task_id', 'filename',
-                         name='cst_managers_task_id_filename'),
+        UniqueConstraint('dataset_id', 'filename',
+                         name='cst_managers_dataset_id_filename'),
         )
 
     # Auto increment primary key.
@@ -435,15 +526,15 @@ class Manager(Base):
         String,
         nullable=False)
 
-    # Task (id and object) owning the manager.
-    task_id = Column(
+    # Dataset that this evaluation belongs to.
+    dataset_id = Column(
         Integer,
-        ForeignKey(Task.id,
+        ForeignKey(Dataset.id,
                    onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
         index=True)
-    task = relationship(
-        Task,
+    dataset = relationship(
+        Dataset,
         backref=backref('managers',
                         collection_class=smart_mapped_collection('filename'),
                         cascade="all, delete-orphan",

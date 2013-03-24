@@ -57,8 +57,8 @@ from cms.async import ServiceCoord
 from cms.db import ask_for_contest
 from cms.db.FileCacher import FileCacher
 from cms.db.SQLAlchemyAll import Session, Contest, User, Task, \
-    Question, Submission, Token, File, UserTest, UserTestFile, \
-    UserTestManager
+    Question, Submission, SubmissionResult, Token, File, UserTest, \
+    UserTestFile, UserTestManager
 from cms.grading.tasktypes import get_task_type
 from cms.grading.scoretypes import get_score_type
 from cms.server import file_handler_gen, extract_archive, \
@@ -931,7 +931,7 @@ class SubmitHandler(BaseHandler):
         # This ensure that the user sent one file for every name in
         # submission format and no more. Less is acceptable if task
         # type says so.
-        task_type = get_task_type(task=task)
+        task_type = get_task_type(dataset=task.active_dataset)
         required = set([x.filename for x in task.submission_format])
         provided = set(self.request.files.keys())
         if not (required == provided or (task_type.ALLOW_PARTIAL_SUBMISSION
@@ -1202,21 +1202,26 @@ class SubmissionStatusHandler(BaseHandler):
         if submission is None:
             raise tornado.web.HTTPError(404)
 
-        score_type = get_score_type(submission=submission)
+        sr = SubmissionResult.get_from_id(
+            (submission.id, submission.task.active_dataset_id),
+            self.sql_session)
+
+        score_type = get_score_type(submission=submission,
+            dataset_id=submission.task.active_dataset_id)
 
         # TODO: use some kind of constants to refer to the status.
         data = dict()
-        if not submission.compiled():
+        if sr is None or not sr.compiled():
             data["status"] = 1
             data["status_text"] = self._("Compiling...")
-        elif submission.compilation_outcome == "fail":
+        elif sr.compilation_outcome == "fail":
             data["status"] = 2
             data["status_text"] = "%s <a class=\"details\">%s</a>" % (
                 self._("Compilation failed"), self._("details"))
-        elif not submission.evaluated():
+        elif not sr.evaluated():
             data["status"] = 3
             data["status_text"] = self._("Evaluating...")
-        elif not submission.scored():
+        elif not sr.scored():
             data["status"] = 4
             data["status_text"] = self._("Scoring...")
         else:
@@ -1228,13 +1233,13 @@ class SubmissionStatusHandler(BaseHandler):
                 data["max_public_score"] = "%g" % \
                     round(score_type.max_public_score, task.score_precision)
             data["public_score"] = "%g" % \
-                round(submission.public_score, task.score_precision)
+                round(sr.public_score, task.score_precision)
             if submission.token is not None:
                 if score_type is not None and score_type.max_score != 0:
                     data["max_score"] = "%g" % \
                         round(score_type.max_score, task.score_precision)
                 data["score"] = "%g" % \
-                    round(submission.score, task.score_precision)
+                    round(sr.score, task.score_precision)
 
         self.write(data)
 
@@ -1259,20 +1264,27 @@ class SubmissionDetailsHandler(BaseHandler):
         if submission is None:
             raise tornado.web.HTTPError(404)
 
-        score_type = get_score_type(submission=submission)
-        details = None
-        if submission.tokened():
-            details = submission.score_details
-        else:
-            details = submission.public_score_details
+        sr = SubmissionResult.get_from_id(
+            (submission.id, submission.task.active_dataset_id),
+            self.sql_session)
 
-        if submission.scored():
-            details = score_type.get_html_details(details, self._)
-        else:
-            details = None
+        score_type = get_score_type(submission=submission,
+            dataset_id=submission.task.active_dataset_id)
+
+        details = None
+        if sr is not None:
+            if submission.tokened():
+                details = sr.score_details
+            else:
+                details = sr.public_score_details
+
+            if score_type is not None and sr.scored():
+                details = score_type.get_html_details(details, self._)
+            else:
+                details = None
 
         self.render("submission_details.html",
-                    s=submission,
+                    sr=sr,
                     details=details)
 
 
@@ -1316,7 +1328,7 @@ class UserTestHandler(BaseHandler):
             raise tornado.web.HTTPError(404)
 
         # Check that the task is testable
-        task_type = get_task_type(task=task)
+        task_type = get_task_type(dataset=task.active_dataset)
         if not task_type.testable:
             logger.warning("User %s tried to make test on task %s." %
                            (self.current_user.username, task_name))
