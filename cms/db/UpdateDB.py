@@ -73,6 +73,7 @@ class ScriptsContainer(object):
             ("20121207", "rename_score_parameters"),
             ("20121208", "add_score_precision"),
             ("20130214", "use_task_datasets"),
+            ("20130216", "index_user_ip"),
             ]
         self.list.sort()
 
@@ -1270,6 +1271,15 @@ CREATE INDEX ix_task_testcases_dataset_version ON task_testcases
 
 COMMIT;
 ''')
+
+    @staticmethod
+    def index_user_ip():
+        """Add index for the ip field of users table.
+
+        """
+        with SessionGen(commit=True) as session:
+            session.execute(
+                "CREATE INDEX ix_users_ip ON users USING btree (ip);")
 
 
 def execute_single_script(scripts_container, script):

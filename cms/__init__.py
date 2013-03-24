@@ -80,6 +80,7 @@ class Config:
         self.tests_local_copy = True
         self.tests_local_copy_path = "%s/tests/"
         self.ip_lock = True
+        self.ip_autologin = False
         self.block_hidden_users = False
         self.is_proxy_used = False
         self.max_submission_length = 100000
