@@ -3,6 +3,7 @@
 {% from urllib import quote %}
 {% import simplejson as json %}
 {% from cms.server import format_amount_of_time, format_time, format_datetime, format_datetime_smart, get_score_class %}
+{% from cms.server.authtypes import get_auth_types, get_auth_details %}
 {% from cmscommon.DateTime import make_timestamp %}
 <!DOCTYPE html>
 <html>
@@ -51,7 +52,7 @@ $(document).ready(function () {
                     <a class="brand" href="{{ url_root }}/">{{ contest.description }}</a>
 {% if current_user is not None %}
                     <p class="navbar-text pull-right">
-                        {% raw _("Logged in as <strong>%(first_name)s %(last_name)s</strong> <em>(%(username)s)</em>") % {"first_name": current_user.first_name, "last_name": current_user.last_name, "username": current_user.username} %}
+                        {% raw _("Logged in as <strong>%(first_name)s %(last_name)s</strong> <em>(%(details)s)</em>") % {"first_name": current_user.first_name, "last_name": current_user.last_name, "details": get_auth_details(current_user)} %}
                         <a class="btn btn-warning" href="{{ url_root }}/logout">{{ _("Logout") }}</a>
                     </p>
 {% end %}
@@ -67,33 +68,23 @@ $(document).ready(function () {
             </div>
         </div>
     {% end %}
+    {% set auth_types = get_auth_types() %}
         <div class="login_container">
             <div class="login_box hero-unit">
                 <h1>{{ _("Welcome") }}</h1>
+            {% if len(auth_types) == 0 %}
+                <p>ERROR: There is no way to authenticate to the server. Too bad.</p>
+            {% else %}
                 <p>{{ _("Please log in") }}</p>
-                <form class="form-horizontal" action="{{ url_root }}/login" method="POST">
-                    <input type="hidden" name="next" value="{{ handler.get_argument("next", "/") }}">
-                    <fieldset>
-                        <div class="control-group">
-                            <label class="control-label" for="input01">{{ _("Username") }}</label>
-                            <div class="controls">
-                                <input type="text" class="input-xlarge" name="username">
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <label class="control-label" for="input01">{{ _("Password") }}</label>
-                            <div class="controls">
-                                <input type="password" class="input-xlarge" name="password">
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <div class="controls">
-                                <button type="submit" class="btn btn-primary btn-large">{{ _("Login") }}</button>
-                                <button type="reset" class="btn btn-large">{{ _("Reset") }}</button>
-                            </div>
-                        </div>
-                    </fieldset>
-                </form>
+                {% set prev_auth_type = None %}
+                {% for auth_type in auth_types %}
+                    {% if prev_auth_type is not None %}
+                    <hr />
+                    {% end %}
+                    {% raw auth_type.get_login_html(url_root=url_root, _=_, handler=handler) %}
+                    {% set prev_auth_type = auth_type %}
+                {% end %}
+            {% end %}
             </div>
         </div>
 {% else %}

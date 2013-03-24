@@ -156,5 +156,21 @@
 
 
 
+    "_section": "User authentication",
+
+    "_help": "What login methods to allow.",
+    "_auth_types": ["Password", "Facebook", "Google"],
+    "auth_types": ["Password"],
+
+    "_help": "Facebook app ids and secret keys for Facebook authentication.",
+    "facebook_app_id": "",
+    "facebook_app_secret": "",
+
+    "_help": "Twitter app ids and secret keys for Twitter authentication.",
+    "twitter_consumer_key": "",
+    "twitter_consumer_secret": "",
+
+
+
     "_help": "This is the end of this file."
 }

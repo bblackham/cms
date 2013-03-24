@@ -64,6 +64,7 @@ from cms.grading.scoretypes import get_score_type
 from cms.server import file_handler_gen, extract_archive, \
     actual_phase_required, get_url_root, filter_ascii, \
     CommonRequestHandler
+from cms.server.authtypes import get_auth_type, get_auth_types
 from cmscommon import ISOCodes
 from cmscommon.Cryptographics import encrypt_number
 from cmscommon.DateTime import make_datetime, make_timestamp, get_timezone
@@ -110,8 +111,9 @@ class BaseHandler(CommonRequestHandler):
             return None
         try:
             cookie = pickle.loads(self.get_secure_cookie("login"))
-            username = str(cookie[0])
-            last_update = make_datetime(cookie[1])
+            auth_type_name = cookie[0]
+            auth_username = cookie[1]
+            last_update = make_datetime(cookie[2])
         except:
             self.clear_cookie("login")
             return None
@@ -122,20 +124,60 @@ class BaseHandler(CommonRequestHandler):
             self.clear_cookie("login")
             return None
 
+        auth_type_class = get_auth_type(auth_type_name)
+        if auth_type_class is None:
+            self.clear_cookie("login")
+            return None
+
         user = self.sql_session.query(User)\
             .filter(User.contest == self.contest)\
-            .filter(User.username == username).first()
+            .filter(User.auth_type == auth_type_name)\
+            .filter(User.username == auth_username).first()
+
         if user is None:
             self.clear_cookie("login")
             return None
 
         if self.refresh_cookie:
             self.set_secure_cookie("login",
-                                   pickle.dumps((user.username,
+                                   pickle.dumps((auth_type_name, user.username,
                                                  make_timestamp())),
                                    expires_days=None)
 
         return user
+
+    def try_user_login(self, user):
+        filtered_user = filter_ascii(user.username)
+
+        # Check IP address lock.
+        if config.ip_lock and user.ip is not None \
+                and user.ip != self.request.remote_ip:
+            logger.info("Unexpected IP from login with %s "
+                        "user=%s remote_ip=%s." %
+                        (user.auth_type, filtered_user,
+                         self.request.remote_ip))
+            self.redirect("/?login_error=true")
+            return
+
+        # Check for hidden user block.
+        if user.hidden and config.block_hidden_users:
+            logger.info("Hidden user login attempt with %s "
+                        "user=%s remote_ip=%s." %
+                        (user.auth_type, filtered_user,
+                         self.request.remote_ip))
+            self.redirect("/?login_error=true")
+            return
+
+        # Success!
+        logger.info("User logged with %s: user=%s remote_ip=%s." %
+                    (user.auth_type, filtered_user, self.request.remote_ip))
+        self.set_secure_cookie("login",
+                               pickle.dumps((user.auth_type, user.username,
+                                             make_timestamp())),
+                               expires_days=None)
+
+        next_page = self.get_argument("next", "/")
+        self.redirect(next_page)
 
     def get_user_locale(self):
         if config.installed:
@@ -388,6 +430,11 @@ class ContestWebServer(WebService):
             "debug": config.tornado_debug,
         }
         parameters["is_proxy_used"] = config.is_proxy_used
+
+        for auth_type in get_auth_types():
+            _cws_handlers.extend(auth_type.get_url_handlers())
+            parameters.update(auth_type.get_application_params())
+
         WebService.__init__(
             self,
             config.contest_listen_port[shard],
@@ -451,46 +498,6 @@ class DocumentationHandler(BaseHandler):
     @tornado.web.authenticated
     def get(self):
         self.render("documentation.html", **self.r_params)
-
-
-class LoginHandler(BaseHandler):
-    """Login handler.
-
-    """
-    def post(self):
-        username = self.get_argument("username", "")
-        password = self.get_argument("password", "")
-        next_page = self.get_argument("next", "/")
-        user = self.sql_session.query(User)\
-            .filter(User.contest == self.contest)\
-            .filter(User.username == username).first()
-
-        filtered_user = filter_ascii(username)
-        filtered_pass = filter_ascii(password)
-        if user is None or user.password != password:
-            logger.info("Login error: user=%s pass=%s remote_ip=%s." %
-                        (filtered_user, filtered_pass, self.request.remote_ip))
-            self.redirect("/?login_error=true")
-            return
-        if config.ip_lock and user.ip is not None \
-                and user.ip != self.request.remote_ip:
-            logger.info("Unexpected IP: user=%s pass=%s remote_ip=%s." %
-                        (filtered_user, filtered_pass, self.request.remote_ip))
-            self.redirect("/?login_error=true")
-            return
-        if user.hidden and config.block_hidden_users:
-            logger.info("Hidden user login attempt: "
-                        "user=%s pass=%s remote_ip=%s." %
-                        (filtered_user, filtered_pass, self.request.remote_ip))
-            self.redirect("/?login_error=true")
-            return
-
-        logger.info("User logged in: user=%s remote_ip=%s." %
-                    (filtered_user, self.request.remote_ip))
-        self.set_secure_cookie("login",
-                               pickle.dumps((user.username, make_timestamp())),
-                               expires_days=None)
-        self.redirect(next_page)
 
 
 class StartHandler(BaseHandler):
@@ -1807,7 +1814,6 @@ class StaticFileGzHandler(tornado.web.StaticFileHandler):
 
 _cws_handlers = [
     (r"/",       MainHandler),
-    (r"/login",  LoginHandler),
     (r"/logout", LogoutHandler),
     (r"/start",  StartHandler),
     (r"/tasks/(.*)/description", TaskDescriptionHandler),
