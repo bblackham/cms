@@ -74,6 +74,7 @@ class ScriptsContainer(object):
             ("20121208", "add_score_precision"),
             ("20130214", "use_task_datasets"),
             ("20130216", "index_user_ip"),
+            ("20130324", "add_auth_type"),
             ]
         self.list.sort()
 
@@ -1280,6 +1281,24 @@ COMMIT;
         with SessionGen(commit=True) as session:
             session.execute(
                 "CREATE INDEX ix_users_ip ON users USING btree (ip);")
+
+    def add_auth_type():
+        """Add auth_type to users table.
+
+        """
+        with SessionGen(commit=True) as session:
+            session.execute("""
+            ALTER TABLE users ADD COLUMN auth_type VARCHAR
+                NOT NULL
+                DEFAULT 'Password';
+            ALTER TABLE users ALTER COLUMN auth_type
+                DROP DEFAULT;
+            ALTER TABLE users
+                DROP CONSTRAINT IF EXISTS cst_user_contest_id_username;
+            ALTER TABLE users
+                ADD CONSTRAINT cst_user_contest_id_auth_type_username UNIQUE 
+                (id, auth_type, username);
+            """)
 
 
 def execute_single_script(scripts_container, script):

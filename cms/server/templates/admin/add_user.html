@@ -1,6 +1,8 @@
 {% extends base.html %}
 
 {% block core %}
+{% from cms.server.authtypes import get_auth_types %}
+{% set auth_type_list = get_auth_types() %}
 
 <h1>New user</h1>
 
@@ -28,6 +30,16 @@
       <tr>
         <td>Email</td>
         <td><input type="text" name="email" /></td>
+      </tr>
+      <tr>
+        <td>Authentication Type</td>
+        <td>
+          <select name="auth_type">
+            {% for auth_type in auth_type_list %}
+            <option value="{{ auth_type.__name__}}">{{auth_type.__name__}}</option>
+            {% end %}
+          </select>
+        </td>
       </tr>
       <tr>
         <td>IP</td>

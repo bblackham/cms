@@ -507,6 +507,9 @@ class CommonRequestHandler(RequestHandler):
     """
 
     def redirect(self, url):
+        if url.startswith("http://") or url.startswith("https://"):
+            return RequestHandler.redirect(self, url)
+                 
         url = get_url_root(self.request.path) + url
 
         # We would prefer to just use this:

@@ -252,7 +252,10 @@ class Base(object):
                 # too) to detect the type. Note that callables require a
                 # ExecutionContext argument (which we don't have).
                 if col.default is not None:
-                    setattr(self, prp.key, col.default.arg)
+                    v = col.default.arg
+                    if hasattr(v, '__call__'):
+                        v = v(None)
+                    setattr(self, prp.key, v)
             else:
                 val = kwargs.pop(prp.key)
 

@@ -119,6 +119,9 @@ class Config:
         self.color_remote_shell_log = True
         self.color_remote_file_log = True
 
+        # User authentication
+        self.auth_types = ["Password"]
+
         # Installed or from source?
         self.installed = sys.argv[0].startswith("/usr/") and \
             sys.argv[0] != '/usr/bin/ipython' and \
