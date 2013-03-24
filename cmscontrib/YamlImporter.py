@@ -166,7 +166,6 @@ class YamlLoader:
 
         # These parameters are applied to a dataset, rather than the task.
         dparams = {
-            "version": 1,
             "description": "Default",
         }
 
@@ -408,7 +407,7 @@ class YamlLoader:
             conf.get("min_user_test_interval", None)
 
         params["datasets"] = [dparams]
-        params["active_dataset"] = dparams["version"]
+        params["active_dataset"] = 0
 
         logger.info("Task parameters loaded.")
 
