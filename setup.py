@@ -86,6 +86,7 @@ def do_setup():
           packages=["cms",
                     "cms.db",
                     "cms.server",
+                    "cms.server.authtypes",
                     "cms.service",
                     "cms.async",
                     "cms.grading",
