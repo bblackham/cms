@@ -242,7 +242,6 @@ class Task(Base):
             sfe_data) for sfe_data in data['submission_format']]
         data['datasets'] = [Dataset.import_from_dict(dataset_data)
                             for dataset_data in data['datasets']]
-        data['datasets'] = dict([(_d.id, _d) for _d in data['datasets']])
         if data['active_dataset'] is not None:
             data['active_dataset'] = data['datasets'][data['active_dataset']]
         data['statements'] = [Statement.import_from_dict(statement_data)

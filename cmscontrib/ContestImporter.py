@@ -5,6 +5,7 @@
 # Copyright © 2010-2012 Giovanni Mascellani <mascellani@poisson.phc.unipi.it>
 # Copyright © 2010-2012 Stefano Maggiolo <s.maggiolo@gmail.com>
 # Copyright © 2010-2012 Matteo Boscariol <boscarim@hotmail.com>
+# Copyright © 2012 Luca Wehrstedt <luca.wehrstedt@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -35,11 +36,18 @@ import sqlalchemy.exc
 import tarfile
 import zipfile
 
+from datetime import timedelta
+
+from sqlalchemy.orm import ColumnProperty, RelationshipProperty, configure_mappers
+from sqlalchemy.types import Boolean, Integer, Float, String, DateTime, Interval
+import cms.db.SQLAlchemyAll as class_hook
+
 from cms import logger
 from cms.db.FileCacher import FileCacher
 from cms.db.SQLAlchemyAll import SessionGen, Contest, metadata
 
 from cmscontrib import sha1sum
+from cmscommon.DateTime import make_datetime
 
 
 def find_root_of_archive(file_names):
@@ -79,6 +87,8 @@ class ContestImporter:
         self.import_dir = import_source
 
         self.file_cacher = FileCacher()
+
+        configure_mappers()
 
     def run(self):
         """Interface to make the class do its job."""
@@ -133,21 +143,40 @@ class ContestImporter:
             logger.critical("Unable to access DB.\n%r" % error)
             return False
 
-        logger.info("Reading JSON file...")
-        with open(os.path.join(self.import_dir, "contest.json")) as fin:
-            contest_json = json.load(fin)
-        if self.no_submissions:
-            for user in contest_json["users"]:
-                user["submissions"] = []
-                user["user_tests"] = []
-
         if not self.only_files:
             with SessionGen(commit=False) as session:
 
                 # Import the contest in JSON format.
                 logger.info("Importing the contest from JSON file.")
-                contest = Contest.import_from_dict(contest_json)
-                session.add(contest)
+
+                with open(os.path.join(self.import_dir,
+                                       "contest.json")) as fin:
+                    # Throughout all the code we'll assume the input is
+                    # correct without actually doing any validations.
+                    # Thus, for example, we're not checking that the
+                    # decoded object is a dict...
+                    self.datas = json.load(fin)
+
+                self.objs = dict()
+                for _id, data in self.datas.iteritems():
+                    obj = self.import_object(data)
+                    self.objs[_id] = obj
+                    session.add(obj)
+
+                for _id in self.datas:
+                    self.add_relationships(self.datas[_id], self.objs[_id])
+
+                # Mmh... kind of fragile interface
+                contest = self.objs["0"]
+
+                # Check that no files were missing (only if files were
+                # imported).
+                if False and not self.no_files:
+                    contest_files = contest.enumerate_files()
+                    missing_files = contest_files.difference(files)
+                    if len(missing_files) > 0:
+                        logger.warning("Some files needed to the contest "
+                                       "are missing in the import directory.")
 
                 session.flush()
                 contest_id = contest.id
@@ -180,6 +209,81 @@ class ContestImporter:
             shutil.rmtree(self.import_dir)
 
         return True
+
+    def import_object(self, data):
+        """Import objects from the given data (without relationships)
+
+        The given data is assumed to be a dict in the format produced by
+        ContestExporter. This method reads the "_class" item and tries
+        to find the corresponding class. Then it loads all column
+        properties of that class (those that are present in the data)
+        and uses them as keyword arguments in a call to the class
+        constructor (if a required property is missing this call will
+        raise an error).
+
+        Relationships are not handled by this method, since we may not
+        have all referenced objects available yet. Thus we prefer to add
+        relationships in a later moment, using the add_relationships
+        method.
+
+        """
+        cls = getattr(class_hook, data["_class"])
+
+        args = dict()
+
+        for prp in cls._col_props:
+            if prp.key not in data:
+                # We will let the __init__ of the class check if any
+                # argument is missing, so it's safe to just skip here.
+                continue
+
+            col = prp.columns[0]
+            col_type = type(col.type)
+
+            val = data[prp.key]
+            if col_type in [Boolean, Integer, Float, String]:
+                args[prp.key] = val
+            elif col_type is DateTime:
+                args[prp.key] = make_datetime(val) if val is not None else None
+            elif col_type is Interval:
+                args[prp.key] = timedelta(seconds=val) if val is not None else None
+            else:
+                raise RuntimeError("Unknown SQLAlchemy column type: %s" % col_type)
+
+        return cls(**args)
+
+    def add_relationships(self, data, obj):
+        """Add the relationships to the given object, using the given data.
+
+        Do what we didn't in import_objects: importing relationships.
+        We already now the class of the object so we simply iterate over
+        its relationship properties trying to load them from the data (if
+        present), checking wheter they are IDs or collection of IDs,
+        dereferencing them (i.e. getting the corresponding object) and
+        reflecting all on the given object.
+
+        Note that both methods don't check if the given data has more
+        items than the ones we understand and use.
+
+        """
+        cls = type(obj)
+
+        for prp in cls._rel_props:
+            if prp.key not in data:
+                # Relationships are always optional
+                continue
+
+            val = data[prp.key]
+            if val is None:
+                setattr(obj, prp.key, None)
+            elif type(val) == str:
+                setattr(obj, prp.key, self.objs[val])
+            elif type(val) == list:
+                setattr(obj, prp.key, list(self.objs[i] for i in val))
+            elif type(val) == dict:
+                setattr(obj, prp.key, dict((k, self.objs[v]) for k, v in val.iteritems()))
+            else:
+                raise RuntimeError("Unknown RelationshipProperty value: %s" % type(val))
 
     def safe_put_file(self, path, descr_path):
         """Put a file to FileCacher signaling every error (including

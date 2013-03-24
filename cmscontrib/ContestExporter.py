@@ -5,6 +5,7 @@
 # Copyright © 2010-2012 Giovanni Mascellani <mascellani@poisson.phc.unipi.it>
 # Copyright © 2010-2012 Stefano Maggiolo <s.maggiolo@gmail.com>
 # Copyright © 2010-2012 Matteo Boscariol <boscarim@hotmail.com>
+# Copyright © 2012 Luca Wehrstedt <luca.wehrstedt@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -34,12 +35,16 @@ import codecs
 
 import tarfile
 
+from sqlalchemy.orm import ColumnProperty, RelationshipProperty
+from sqlalchemy.types import Boolean, Integer, Float, String, DateTime, Interval
+
 from cms import logger
 from cms.db import ask_for_contest
 from cms.db.FileCacher import FileCacher
-from cms.db.SQLAlchemyAll import SessionGen, Contest
+from cms.db.SQLAlchemyAll import SessionGen, Contest, Submission
 
 from cmscontrib import sha1sum
+from cmscommon.DateTime import make_timestamp
 
 
 def get_archive_info(file_name):
@@ -157,11 +162,27 @@ class ContestExporter:
 
             # Export the contest in JSON format.
             logger.info("Exporting the contest in JSON format.")
+
+            self.ids = {contest: "0"}
+            self.queue = [contest]
+
+            data = dict()
+            i = 0
+            while i < len(self.queue):
+                obj = self.queue[i]
+                data[self.ids[obj]] = self.export_object(obj)
+                i += 1
+
+            def maybe_sort_numerically(x):
+                try:
+                    if isinstance(x, tuple) or isinstance(x, list):
+                        x = x[0]
+                    x = int(x)
+                except:
+                    pass
+                return x
             with open(os.path.join(export_dir, "contest.json"), 'w') as fout:
-                json.dump(contest.export_to_dict(
-                        self.skip_submissions,
-                        self.skip_user_tests),
-                          fout, indent=4)
+                json.dump(data, fout, indent=4, sort_keys=True, item_sort_key=maybe_sort_numerically)
 
         # If the admin requested export to file, we do that.
         if archive_info["write_mode"] != "":
@@ -175,6 +196,77 @@ class ContestExporter:
         logger.operation = ""
 
         return True
+
+    def get_id(self, obj):
+        if obj not in self.ids:
+            # We use strings because they'll be the keys of a JSON object
+            self.ids[obj] = str(len(self.ids))
+            self.queue.append(obj)
+
+        return self.ids[obj]
+
+    def export_object(self, obj):
+        """Export the given object, returning a JSON-encodable dict
+
+        The returned dict will contain a "_class" item (the name of the
+        class of the given object), an item for each column property
+        (with a value properly translated to a JSON-compatible type)
+        and an item for each relationship property (which will be an ID
+        or a collection of IDs).
+
+        The IDs used in the exported dict aren't related to the ones
+        used in the DB: they are newly generated and their scope is
+        limited to the exported file only. They are shared among all
+        classes (that is, two objects can never share the same ID, even
+        if they are of different classes). The contest will have ID 0.
+
+        If, when exporting the relationship, we find an object without
+        an ID we generate a new ID, assign it to the object and append
+        the object to the queue of objects to export.
+
+        The self.skip_submissions flag controls wheter we export
+        submissions (and all other objects that can be reached only by
+        passing through a submission) or not.
+
+        """
+        cls = type(obj)
+
+        data = {"_class": cls.__name__}
+
+        for prp in cls._col_props:
+            col = prp.columns[0]
+            col_type = type(col.type)
+
+            val = getattr(obj, prp.key)
+            if col_type in [Boolean, Integer, Float, String]:
+                data[prp.key] = val
+            elif col_type is DateTime:
+                data[prp.key] = make_timestamp(val) if val is not None else None
+            elif col_type is Interval:
+                data[prp.key] = val.total_seconds() if val is not None else None
+            else:
+                raise RuntimeError("Unknown SQLAlchemy column type: %s" % col_type)
+
+        for prp in cls._rel_props:
+            other_cls = prp.mapper.class_
+
+            # Skip submissions if requested
+            if self.skip_submissions and other_cls is Submission:
+                continue
+
+            val = getattr(obj, prp.key)
+            if val is None:
+                data[prp.key] = None
+            elif isinstance(val, other_cls):
+                data[prp.key] = self.get_id(val)
+            elif isinstance(val, list):
+                data[prp.key] = list(self.get_id(i) for i in val)
+            elif isinstance(val, dict):
+                data[prp.key] = dict((k, self.get_id(v)) for k, v in val.iteritems())
+            else:
+                raise RuntimeError("Unknown SQLAlchemy relationship type on %s: %s" % (prp.key, type(val)))
+
+        return data
 
     def safe_get_file(self, digest, path, descr_path=None):
         """Get file from FileCacher ensuring that the digest is
